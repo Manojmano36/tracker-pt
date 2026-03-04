@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poshan Tracker Data Filter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <main class="dashboard-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar hidden" id="app-sidebar">
+            <div class="sidebar-header">
+                <h2>Filters</h2>
+            </div>
+
+            <div class="filter-section">
+                <div class="filter-group">
+                    <label>AWC NAME</label>
+                    <select id="filter-awc">
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>BENEFICIARY TYPE</label>
+                    <select id="filter-category" multiple size="4">
+                        <!-- Options injected by JS -->
+                    </select>
+                    <small style="color:var(--text-muted); font-size:0.7rem; display:block; margin-top:4px;">Hold
+                        Ctrl/Cmd to select multiple</small>
+                </div>
+                <div class="filter-group thr-filter">
+                    <label>STATUS</label>
+                    <select id="filter-status">
+                        <option value="active" selected>active</option>
+                    </select>
+                </div>
+                <div class="filter-group thr-filter">
+                    <label>SNP OPT-OUT</label>
+                    <select id="filter-optout">
+                        <option value="no" selected>no</option>
+                    </select>
+                </div>
+                <div class="filter-group thr-filter">
+                    <label>DAYS THR</label>
+                    <select id="filter-thr">
+                        <option value="all">Any</option>
+                    </select>
+                </div>
+                <div class="filter-group thr-filter">
+                    <label>DAYS HCM</label>
+                    <select id="filter-hcm">
+                        <option value="all">Any</option>
+                    </select>
+                </div>
+
+                <!-- FRS Specific Filters -->
+                <div class="filter-group frs-filter hidden">
+                    <label>FACE CAPTURED</label>
+                    <select id="filter-face-captured" multiple size="3">
+                        <option value="all">All</option>
+                    </select>
+                    <small style="color:var(--text-muted); font-size:0.7rem; display:block; margin-top:4px;">Hold
+                        Ctrl/Cmd to select multiple</small>
+                </div>
+                <div class="filter-group frs-filter hidden">
+                    <label>EKYC DONE</label>
+                    <select id="filter-ekyc-done" multiple size="3">
+                        <option value="all">All</option>
+                    </select>
+                    <small style="color:var(--text-muted); font-size:0.7rem; display:block; margin-top:4px;">Hold
+                        Ctrl/Cmd to select multiple</small>
+                </div>
+                <div class="filter-group frs-filter hidden">
+                    <label>AADHAAR FACE MATCHING</label>
+                    <select id="filter-aadhaar-matching" multiple size="3">
+                        <option value="all">All</option>
+                    </select>
+                    <small style="color:var(--text-muted); font-size:0.7rem; display:block; margin-top:4px;">Hold
+                        Ctrl/Cmd to select multiple</small>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <button id="reset-btn" class="secondary-btn small-btn" style="width: 100%;">Upload New File</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <header class="dashboard-header">
+                <div class="title-area">
+                    <h1>Poshan Tracker <span>Analytics</span></h1>
+                    <p>Reviewing Incomplete THR Tasks</p>
+                </div>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="thr">THR Report</button>
+                    <button class="tab-btn" data-tab="frs">FRS Report</button>
+                    <button class="tab-btn" data-tab="sam">3-Month SAM Report</button>
+                    <button class="tab-btn" data-tab="measuring">Measuring Efficiency</button>
+                </div>
+            </header>
+
+            <section id="upload-section" class="card fade-in">
+                <!-- Standard Single Upload -->
+                <div class="drop-zone" id="drop-zone">
+                    <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                        </path>
+                    </svg>
+                    <p>Drag and drop your POSHAN TRACKER CSV or Excel file here, or <strong>click to browse</strong></p>
+                    <input type="file" id="csv-file-input" accept=".csv, .xlsx" hidden>
+                </div>
+
+                <!-- Multi-Upload for SAM/MAM Intersection -->
+                <div class="multi-upload-container hidden" id="multi-upload-container">
+                    <h3>Upload Last 3 Months Data</h3>
+                    <p style="color:var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; text-align:center;">
+                        This tool will cross-reference exact names, DOB, and parents to find children present across all
+                        3 months.</p>
+
+                    <div class="multi-upload-grid">
+                        <div class="drop-zone mini" id="drop-zone-m1">
+                            <p>Month 1 <br><small>(Oldest)</small></p>
+                            <input type="file" id="csv-m1" accept=".csv, .xlsx" hidden>
+                            <div class="file-status"></div>
+                        </div>
+                        <div class="drop-zone mini" id="drop-zone-m2">
+                            <p>Month 2</p>
+                            <input type="file" id="csv-m2" accept=".csv, .xlsx" hidden>
+                            <div class="file-status"></div>
+                        </div>
+                        <div class="drop-zone mini" id="drop-zone-m3">
+                            <p>Month 3 <br><small>(Newest)</small></p>
+                            <input type="file" id="csv-m3" accept=".csv, .xlsx" hidden>
+                            <div class="file-status"></div>
+                        </div>
+                    </div>
+
+                    <button id="process-multi-btn" class="secondary-btn"
+                        style="width:100%; margin-top: 1.5rem; background: var(--primary); color: white; border: none; padding: 1rem; font-size: 1.1rem; border-radius: 8px;">Find
+                        Intersections</button>
+                </div>
+            </section>
+
+            <section id="loading-section" class="card hidden">
+                <div class="loader-container">
+                    <div class="spinner"></div>
+                    <p>Cleaning & Processing Data...</p>
+                </div>
+            </section>
+
+            <section id="results-section" class="hidden fade-in results-wrapper">
+
+                <div class="top-stats-container">
+                    <div class="summary-dashboard" id="standard-dashboard">
+                        <div class="stat-box">
+                            <h3>Target Beneficiaries</h3>
+                            <p id="stat-total">0</p>
+                        </div>
+                        <div class="stat-box success-box">
+                            <h3>Given (Complete)</h3>
+                            <p id="stat-given">0</p>
+                        </div>
+                        <div class="stat-box error-box">
+                            <h3>Not Given (Incomplete)</h3>
+                            <p id="stat-not-given">0</p>
+                        </div>
+                        <div class="stat-box neutral-box">
+                            <h3>Completion Rate</h3>
+                            <p id="stat-percent">0%</p>
+                        </div>
+                    </div>
+
+                    <div class="summary-dashboard hidden" id="sam-dashboard">
+                        <div class="stat-box expandable" style="cursor: pointer; position: relative;"
+                            onclick="var d=this.querySelector('.breakdown-details'); if(d) d.classList.toggle('hidden');">
+                            <h3>Month 1 Severe <span style="font-size:0.7em; opacity:0.6; font-weight:normal;">(Click
+                                    for details)</span></h3>
+                            <p id="stat-m1-severe">0</p>
+                            <small id="stat-m1-total"
+                                style="color:var(--text-muted); font-size:0.85rem; display:block; margin-top:5px;">0
+                                Uploaded</small>
+                            <div class="breakdown-details hidden"
+                                style="margin-top:10px; font-size: 0.8rem; text-align: left; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; line-height: 1.5; font-weight: 500;">
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM only:</span><span id="m1-sam-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>Severely Stunted only:</span><span id="m1-stunted-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>Severely Underweight only:</span><span id="m1-underweight-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM + Severely Stunted:</span><span id="m1-sam-stunted">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM + Severely Underweight:</span><span id="m1-sam-underweight">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SS + SUW:</span><span id="m1-stunted-underweight">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>All three:</span><span id="m1-all-three">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-box expandable" style="cursor: pointer; position: relative;"
+                            onclick="var d=this.querySelector('.breakdown-details'); if(d) d.classList.toggle('hidden');">
+                            <h3>Month 2 Severe <span style="font-size:0.7em; opacity:0.6; font-weight:normal;">(Click
+                                    for details)</span></h3>
+                            <p id="stat-m2-severe">0</p>
+                            <small id="stat-m2-total"
+                                style="color:var(--text-muted); font-size:0.85rem; display:block; margin-top:5px;">0
+                                Uploaded</small>
+                            <div class="breakdown-details hidden"
+                                style="margin-top:10px; font-size: 0.8rem; text-align: left; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; line-height: 1.5; font-weight: 500;">
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM only:</span><span id="m2-sam-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>Severely Stunted only:</span><span id="m2-stunted-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>Severely Underweight only:</span><span id="m2-underweight-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM + Severely Stunted:</span><span id="m2-sam-stunted">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM + Severely Underweight:</span><span id="m2-sam-underweight">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SS + SUW:</span><span id="m2-stunted-underweight">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>All three:</span><span id="m2-all-three">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-box expandable" style="cursor: pointer; position: relative;"
+                            onclick="const d=this.querySelector('.breakdown-details'); if(d) d.classList.toggle('hidden');">
+                            <h3>Month 3 Severe <span style="font-size:0.7em; opacity:0.6; font-weight:normal;">(Click
+                                    for details)</span></h3>
+                            <p id="stat-m3-severe">0</p>
+                            <small id="stat-m3-total"
+                                style="color:var(--text-muted); font-size:0.85rem; display:block; margin-top:5px;">0
+                                Uploaded</small>
+                            <div class="breakdown-details hidden"
+                                style="margin-top:10px; font-size: 0.8rem; text-align: left; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; line-height: 1.5; font-weight: 500;">
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM only:</span><span id="m3-sam-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>Severely Stunted only:</span><span id="m3-stunted-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>Severely Underweight only:</span><span id="m3-underweight-only">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM + Severely Stunted:</span><span id="m3-sam-stunted">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SAM + Severely Underweight:</span><span id="m3-sam-underweight">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>SS + SUW:</span><span id="m3-stunted-underweight">0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; color: var(--text-color);">
+                                    <span>All three:</span><span id="m3-all-three">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-box error-box">
+                            <h3>Continuous Severe (3 Months)</h3>
+                            <p id="stat-continuous-severe">0</p>
+                        </div>
+                    </div>
+
+                    <div class="category-breakdown">
+                        <h3>Category Breakdown</h3>
+                        <div class="category-grid" id="category-stats-container">
+                            <!-- Cards will be injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-header"
+                        style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3>Incomplete Beneficiaries Details</h3>
+                        <button id="download-btn" class="secondary-btn small-btn"
+                            style="background: var(--primary); color: white; border-color: var(--primary);">
+                            <svg style="width:16px; height:16px; display:inline; vertical-align:middle; margin-right:4px;"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg> Download Report
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="results-table">
+                            <thead>
+                                <tr id="table-head">
+                                    <th>AWC CODE</th>
+                                    <th>AWC NAME</th>
+                                    <th>BENEFICIARY NAME</th>
+                                    <th>CATEGORY</th>
+                                    <th>THR DAYS</th>
+                                    <th>HCM DAYS</th>
+                                    <th>TOTAL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <!-- Rows will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Top 10 AWC List Container -->
+                <div class="top-awc-card hidden" id="top-awc-container">
+                    <div class="top-awc-title">
+                        <h3 id="top-awc-heading">Top 10 AWC with Most Incomplete Data</h3>
+                    </div>
+                    <ul class="top-awc-list" id="top-awc-list">
+                        <!-- Top 10 items will be injected here -->
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Hidden off-screen template for Tamil PDF Generation -->
+    <div id="measuring-pdf-template"
+        style="position: absolute; left: -9999px; top: -9999px; width: 1000px; padding: 20px; font-family: 'Inter', sans-serif; background: white; color: black;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="font-size: 22px; margin: 0; color: #000; font-weight:bold;">அளவீட்டு செயல்திறன் அறிக்கை</h2>
+            <p style="font-size: 16px; margin: 5px 0; color: #333;">(0-6 வயது குழந்தைகள்)</p>
+            <p style="font-size: 16px; margin: 5px 0; color: #333;">தமிழ்நாடு அரசு</p>
+            <p style="font-size: 16px; margin: 5px 0; color: #333;">ஒருங்கிணைந்த குழந்தைகள் வளர்ச்சி திட்டம்</p>
+        </div>
+        <div
+            style="display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; border-bottom: 2px solid #ccc; padding-bottom: 10px;">
+            <div>
+                <p style="margin: 4px 0;"><strong>மாவட்டம்:</strong> <span id="pdf-district-name">Loading...</span></p>
+                <p style="margin: 4px 0;"><strong>திட்டம்:</strong> <span id="pdf-project-name">Loading...</span></p>
+            </div>
+            <div>
+                <p style="margin: 4px 0;"><strong>செக்டர்:</strong> <span id="pdf-sector-name">Loading...</span></p>
+                <p style="margin: 4px 0;"><strong>தேதி:</strong> <span id="pdf-report-date">Loading...</span></p>
+            </div>
+        </div>
+        <div id="pdf-table-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
