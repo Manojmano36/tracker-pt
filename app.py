@@ -474,6 +474,133 @@ def upload_multi_inner():
         'intersectedData': all_data
     })
 
+@app.route('/upload-comparison', methods=['POST'])
+def upload_comparison():
+    try:
+        return upload_comparison_inner()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Server Error Processing Comparison: {str(e)}'}), 500
+
+def upload_comparison_inner():
+    if 'file_old' not in request.files or 'file_new' not in request.files:
+        return jsonify({'error': 'Please upload exactly 2 files: Old Month and New Month.'}), 400
+        
+    df_old, s_old = read_pt_data(request.files['file_old'])
+    df_new, s_new = read_pt_data(request.files['file_new'])
+    
+    if df_old is None or df_new is None:
+        return jsonify({'error': 'One or more files have an invalid format or could not be parsed.'}), 400
+
+    merge_keys = ['AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'MOTHER NAME', 'DOB', 'GENDER']
+    
+    for key in merge_keys:
+        if key not in df_old.columns: return jsonify({'error': f'Missing necessary column in Old Month file: {key}'}), 400
+        if key not in df_new.columns: return jsonify({'error': f'Missing necessary column in New Month file: {key}'}), 400
+
+    for key in merge_keys:
+        df_old[key] = df_old[key].astype(str).str.strip().str.upper()
+        df_new[key] = df_new[key].astype(str).str.strip().str.upper()
+
+    def extract_metrics(df):
+        wt_col = next((c for c in df.columns if 'WEIGHT' in str(c).upper() and '%' not in str(c).upper()), None)
+        ht_col = next((c for c in df.columns if 'HEIGHT' in str(c).upper() and '%' not in str(c).upper()), None)
+        st_col = next((c for c in df.columns if 'STUNTED' in str(c).upper()), None)
+        wa_col = next((c for c in df.columns if 'WASTED' in str(c).upper()), None)
+        uw_col = next((c for c in df.columns if 'UNDERWEIGHT' in str(c).upper()), None)
+        
+        df['__WEIGHT'] = df[wt_col] if wt_col else ''
+        df['__HEIGHT'] = df[ht_col] if ht_col else ''
+        df['__STUNTED'] = df[st_col] if st_col else ''
+        df['__WASTED'] = df[wa_col] if wa_col else ''
+        df['__UNDERWEIGHT'] = df[uw_col] if uw_col else ''
+        return df
+
+    df_old = extract_metrics(df_old)
+    df_new = extract_metrics(df_new)
+
+    df_old = df_old.drop_duplicates(subset=merge_keys)
+    df_new = df_new.drop_duplicates(subset=merge_keys)
+
+    merged = pd.merge(df_old, df_new, on=merge_keys, how='inner', suffixes=('_OLD', '_NEW'))
+
+    all_data = []
+    updated_count = 0
+
+    def get_nutrition_category(stunted, wasted, underweight):
+        cat = []
+        s = str(stunted).lower().strip()
+        w = str(wasted).lower().strip()
+        u = str(underweight).lower().strip()
+
+        if w in ['sam', 'severely wasted']: cat.append('Severely Wasted')
+        elif w in ['mam', 'moderately wasted']: cat.append('Moderately Wasted')
+
+        if s in ['severely stunted', 'severly stunted', 'ss']: cat.append('Severely Stunted')
+        elif s in ['moderately stunted', 'ms']: cat.append('Moderately Stunted')
+
+        if u in ['severely underweight', 'severly underweight', 'suw']: cat.append('Severely Underweight')
+        elif u in ['moderately underweight', 'muw']: cat.append('Moderately Underweight')
+
+        return ", ".join(cat) if cat else "Normal"
+
+    for _, row in merged.iterrows():
+        o_w = str(row['__WEIGHT_OLD']).replace('nan', '').strip()
+        o_h = str(row['__HEIGHT_OLD']).replace('nan', '').strip()
+        n_w = str(row['__WEIGHT_NEW']).replace('nan', '').strip()
+        n_h = str(row['__HEIGHT_NEW']).replace('nan', '').strip()
+
+        if (n_w and n_w != o_w) or (n_h and n_h != o_h):
+            updated_count += 1
+
+        cat = get_nutrition_category(row['__STUNTED_NEW'], row['__WASTED_NEW'], row['__UNDERWEIGHT_NEW'])
+        
+        sector = str(row.get('SECTOR_NEW', s_new)).title()
+        if sector.lower() == 'nan': sector = s_new.title()
+        
+        btype = str(row.get('BENEFICIARY TYPE_NEW', row.get('BENEFICIARY CATEGORY_NEW', ''))).title()
+        if btype.lower() == 'nan': btype = ''
+
+        all_data.append({
+            'sectorName': sector,
+            'awcName': str(row['AWC NAME']).title(),
+            'awcCode': str(row['AWC CODE']),
+            'name': str(row['BENEFICIARY NAME']).title(),
+            'motherName': str(row['MOTHER NAME']).title(),
+            'dob': str(row['DOB']),
+            'gender': str(row['GENDER']).title(),
+            'category': btype,
+            'oldWeight': o_w,
+            'oldHeight': o_h,
+            'newWeight': n_w,
+            'newHeight': n_h,
+            'nutritionCategory': cat
+        })
+
+    all_data.sort(key=lambda x: (x['awcName'], x['name']))
+    for i, d in enumerate(all_data): d['sNo'] = i + 1
+
+    filters = {
+        'sectors': sorted(list(set([d['sectorName'] for d in all_data if d['sectorName']]))),
+        'awcNames': sorted(list(set([d['awcName'] for d in all_data if d['awcName']]))),
+        'categories': sorted(list(set([d['category'] for d in all_data if d['category']]))),
+        'nutritionCategories': sorted(list(set([d['nutritionCategory'] for d in all_data if d['nutritionCategory']])))
+    }
+
+    return jsonify({
+        'reportType': 'comparison',
+        'stats': {
+            'totalOld': len(df_old),
+            'totalNew': len(df_new),
+            'matched': len(merged),
+            'updated': updated_count
+        },
+        'filters': filters,
+        'tableData': all_data,
+        'count': len(all_data)
+    })
+
 if __name__ == '__main__':
     print("Starting Poshan Tracker Filter Server on http://localhost:5000")
     app.run(host='0.0.0.0', debug=True, port=5000)

@@ -1212,5 +1212,205 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadSection.classList.remove('hidden');
         fileInput.value = ''; // clear input
         allLoadedData = [];
+        // Also hide comparison section if visible
+        const compResults = document.getElementById('comparison-results');
+        if (compResults) compResults.classList.add('hidden');
     });
+
+    // ============================================================
+    // COMPARISON REPORT - New Feature (added without modifying above)
+    // ============================================================
+    const tabComparison = document.querySelector('[data-tab="comparison"]');
+    const compUploadContainer = document.getElementById('comparison-upload-container');
+    const compResults = document.getElementById('comparison-results');
+    const compOldInput = document.getElementById('csv-comp-old');
+    const compNewInput = document.getElementById('csv-comp-new');
+    const compOldZone = document.getElementById('drop-zone-comp-old');
+    const compNewZone = document.getElementById('drop-zone-comp-new');
+    const compOldStatus = document.getElementById('comp-old-status');
+    const compNewStatus = document.getElementById('comp-new-status');
+    const processCompBtn = document.getElementById('process-comp-btn');
+    const compDownloadBtn = document.getElementById('comp-download-btn');
+
+    let compOldFile = null;
+    let compNewFile = null;
+    let compTableData = [];
+
+    if (tabComparison) {
+        tabComparison.addEventListener('click', () => {
+            if (activeReportType === 'comparison') return;
+            activeReportType = 'comparison';
+
+            // Reset UI
+            resultsSection.classList.add('hidden');
+            compResults.classList.add('hidden');
+            const sidebar = document.getElementById('app-sidebar');
+            if (sidebar) sidebar.classList.add('hidden');
+
+            // Switch upload zone
+            document.getElementById('drop-zone').classList.add('hidden');
+            document.getElementById('multi-upload-container').classList.add('hidden');
+            compUploadContainer.classList.remove('hidden');
+            uploadSection.classList.remove('hidden');
+
+            // Switch tab highlight
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            tabComparison.classList.add('active');
+
+            // Hide beneficiary sub-tabs
+            const subTabs = document.getElementById('beneficiary-sub-tabs');
+            if (subTabs) subTabs.classList.add('hidden');
+
+            document.querySelector('.title-area p').textContent = 'Compare Two Monthly Growth Monitoring Reports';
+        });
+    }
+
+    // When user switches AWAY from Comparison, restore the normal upload zone
+    document.querySelectorAll('.tab-btn:not([data-tab="comparison"])').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (activeReportType !== 'comparison') return;
+            compUploadContainer.classList.add('hidden');
+            compResults.classList.add('hidden');
+            document.getElementById('drop-zone').classList.remove('hidden');
+        });
+    });
+
+    // File selection helpers
+    function setupCompZone(zone, input, statusEl, slot) {
+        zone.addEventListener('click', () => input.click());
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', e => {
+            e.preventDefault(); zone.classList.remove('dragover');
+            const f = e.dataTransfer.files[0];
+            if (f) assignCompFile(f, statusEl, slot);
+        });
+        input.addEventListener('change', e => {
+            if (e.target.files[0]) assignCompFile(e.target.files[0], statusEl, slot);
+        });
+    }
+
+    function assignCompFile(file, statusEl, slot) {
+        if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.csv')) {
+            alert('Please upload a valid .xlsx or .csv file.');
+            return;
+        }
+        if (slot === 'old') compOldFile = file;
+        else compNewFile = file;
+        statusEl.textContent = '✓ ' + file.name;
+        statusEl.style.color = '#10b981';
+    }
+
+    if (compOldZone) setupCompZone(compOldZone, compOldInput, compOldStatus, 'old');
+    if (compNewZone) setupCompZone(compNewZone, compNewInput, compNewStatus, 'new');
+
+    // Run comparison
+    if (processCompBtn) {
+        processCompBtn.addEventListener('click', () => {
+            if (!compOldFile || !compNewFile) {
+                alert('Please select both Old Month and New Month Excel files before running.');
+                return;
+            }
+
+            uploadSection.classList.add('hidden');
+            loadingSection.classList.remove('hidden');
+
+            const fd = new FormData();
+            fd.append('file_old', compOldFile);
+            fd.append('file_new', compNewFile);
+
+            fetch('/upload-comparison', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    loadingSection.classList.add('hidden');
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        uploadSection.classList.remove('hidden');
+                        return;
+                    }
+
+                    // Show stats
+                    document.getElementById('stat-comp-old').textContent = data.stats.totalOld;
+                    document.getElementById('stat-comp-new').textContent = data.stats.totalNew;
+                    document.getElementById('stat-comp-matched').textContent = data.stats.matched;
+                    document.getElementById('stat-comp-updated').textContent = data.stats.updated;
+
+                    // Render table
+                    compTableData = data.tableData || [];
+                    renderCompTable(compTableData);
+
+                    compResults.classList.remove('hidden');
+                    uploadSection.classList.remove('hidden');
+                    compUploadContainer.classList.add('hidden');
+                })
+                .catch(err => {
+                    loadingSection.classList.add('hidden');
+                    uploadSection.classList.remove('hidden');
+                    alert('Failed to communicate with the server. Please ensure the Python backend is running.');
+                    console.error(err);
+                });
+        });
+    }
+
+    function renderCompTable(rows) {
+        const tbody = document.getElementById('comparison-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding: 2rem; color: var(--text-muted);">No matching children found between the two files.</td></tr>';
+            return;
+        }
+        rows.forEach((row, i) => {
+            const catColor = row.nutritionCategory === 'Normal' ? '#10b981'
+                : row.nutritionCategory.includes('Severe') || row.nutritionCategory.includes('SAM') ? '#ef4444'
+                    : '#f59e0b';
+            tbody.innerHTML += `<tr>
+                <td>${i + 1}</td>
+                <td>${row.sectorName || ''}</td>
+                <td>${row.awcName || ''}</td>
+                <td>${row.awcCode || ''}</td>
+                <td><strong>${row.name || ''}</strong></td>
+                <td>${row.motherName || ''}</td>
+                <td>${row.dob || ''}</td>
+                <td>${row.gender || ''}</td>
+                <td>${row.oldWeight || '-'}</td>
+                <td>${row.oldHeight || '-'}</td>
+                <td><strong>${row.newWeight || '-'}</strong></td>
+                <td><strong>${row.newHeight || '-'}</strong></td>
+                <td><span style="color:${catColor}; font-weight:600;">${row.nutritionCategory || '-'}</span></td>
+            </tr>`;
+        });
+    }
+
+    // Download PDF for comparison
+    if (compDownloadBtn) {
+        compDownloadBtn.addEventListener('click', () => {
+            if (!compTableData.length) { alert('No data to download.'); return; }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            doc.setFontSize(14);
+            doc.text('Growth Monitoring Comparison Report', 148, 15, { align: 'center' });
+            doc.setFontSize(10);
+            doc.text(`Old Month vs New Month  |  Matched Children: ${compTableData.length}`, 148, 22, { align: 'center' });
+
+            const headers = [['#', 'Sector', 'AWC Name', 'AWC Code', 'Child Name', 'Mother Name', 'DOB', 'Gender', 'Old Wt', 'Old Ht', 'New Wt', 'New Ht', 'Category']];
+            const body = compTableData.map((r, i) => [
+                i + 1, r.sectorName, r.awcName, r.awcCode, r.name, r.motherName, r.dob, r.gender,
+                r.oldWeight || '-', r.oldHeight || '-', r.newWeight || '-', r.newHeight || '-', r.nutritionCategory
+            ]);
+
+            doc.autoTable({
+                startY: 28,
+                head: headers,
+                body: body,
+                styles: { fontSize: 7, cellPadding: 2 },
+                headStyles: { fillColor: [99, 102, 241], textColor: 255, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [245, 245, 255] },
+                margin: { top: 28, left: 10, right: 10 }
+            });
+
+            doc.save('Comparison_Report.pdf');
+        });
+    }
+
 });

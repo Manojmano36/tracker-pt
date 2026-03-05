@@ -112,6 +112,7 @@
                     <button class="tab-btn" data-tab="beneficiary">Beneficiary</button>
                     <button class="tab-btn" data-tab="sam">3-Month SAM</button>
                     <button class="tab-btn" data-tab="measuring">Measuring</button>
+                    <button class="tab-btn" data-tab="comparison">📊 Comparison</button>
                 </div>
             </header>
 
@@ -182,6 +183,28 @@
                     <button id="process-multi-btn" class="secondary-btn"
                         style="width:100%; margin-top: 1.5rem; background: var(--primary); color: white; border: none; padding: 1rem; font-size: 1.1rem; border-radius: 8px;">Find
                         Intersections</button>
+                </div>
+
+                <!-- Comparison Upload (hidden by default) -->
+                <div class="multi-upload-container hidden" id="comparison-upload-container">
+                    <h3>📊 Compare Two Monthly Excel Files</h3>
+                    <p style="color:var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; text-align:center;">
+                        Upload Old Month and New Month Growth Monitoring Excel sheets to compare children's records.</p>
+                    <div class="multi-upload-grid" style="grid-template-columns: 1fr 1fr;">
+                        <div class="drop-zone mini" id="drop-zone-comp-old">
+                            <p>📂 Old Month Excel<br><small>(Previous Month)</small></p>
+                            <input type="file" id="csv-comp-old" accept=".xlsx, .csv" hidden>
+                            <div class="file-status" id="comp-old-status"></div>
+                        </div>
+                        <div class="drop-zone mini" id="drop-zone-comp-new">
+                            <p>📂 New Month Excel<br><small>(Current Month)</small></p>
+                            <input type="file" id="csv-comp-new" accept=".xlsx, .csv" hidden>
+                            <div class="file-status" id="comp-new-status"></div>
+                        </div>
+                    </div>
+                    <button id="process-comp-btn"
+                        style="width:100%; margin-top: 1.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 1rem; font-size: 1.1rem; border-radius: 8px; cursor: pointer; font-weight: 600;">🔍
+                        Run Comparison</button>
                 </div>
             </section>
 
@@ -389,6 +412,61 @@
                         <!-- Top 10 items will be injected here -->
                     </ul>
                 </div>
+                <!-- Comparison Results Section (hidden by default) -->
+                <div id="comparison-results" class="hidden">
+                    <div class="summary-dashboard" id="comparison-dashboard" style="margin-bottom: 1.5rem;">
+                        <div class="stat-box neutral-box">
+                            <h3>Total (Old Month)</h3>
+                            <p id="stat-comp-old">0</p>
+                        </div>
+                        <div class="stat-box neutral-box">
+                            <h3>Total (New Month)</h3>
+                            <p id="stat-comp-new">0</p>
+                        </div>
+                        <div class="stat-box success-box">
+                            <h3>Matched Children</h3>
+                            <p id="stat-comp-matched">0</p>
+                        </div>
+                        <div class="stat-box error-box">
+                            <h3>Height/Weight Updated</h3>
+                            <p id="stat-comp-updated">0</p>
+                        </div>
+                    </div>
+                    <div class="table-card">
+                        <div class="table-header"
+                            style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3>📊 Comparison Report - Matched Children</h3>
+                            <button id="comp-download-btn"
+                                style="background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                ⬇ Download PDF
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table id="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th>S.No</th>
+                                        <th>Sector Name</th>
+                                        <th>AWC Name</th>
+                                        <th>AWC Code</th>
+                                        <th>Beneficiary Name</th>
+                                        <th>Mother Name</th>
+                                        <th>DOB</th>
+                                        <th>Gender</th>
+                                        <th>Old Weight (kg)</th>
+                                        <th>Old Height (cm)</th>
+                                        <th>New Weight (kg)</th>
+                                        <th>New Height (cm)</th>
+                                        <th>Nutrition Category</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comparison-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
             </section>
         </div>
     </main>
