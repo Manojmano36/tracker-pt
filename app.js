@@ -12,8 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let allLoadedData = []; // Store dataset globally in browser
     let currentIncompleteRows = []; // Store currently filtered rows for export
     let globalSectorName = "All Sectors";
-    let activeReportType = "thr"; // "thr", "frs", or "sam"
-    let minDaysTarget = 25;
+    let activeReportType = "thr"; // "thr", "frs", "sam", "measuring", or "beneficiary"
+    let activeBeneficiarySubTab = "mobile"; // "mobile", "aadhaar", or "abha"
 
     // Filter Elements (THR)
     const filterAwc = document.getElementById('filter-awc');
@@ -28,11 +28,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterEkycDone = document.getElementById('filter-ekyc-done');
     const filterAadhaarMatching = document.getElementById('filter-aadhaar-matching');
 
+    // Filter Elements (Beneficiary)
+    const filterSearch = document.getElementById('filter-search');
+    const filterSector = document.getElementById('filter-sector');
+
     // Tab Elements
     const tabThr = document.querySelector('[data-tab="thr"]');
     const tabFrs = document.querySelector('[data-tab="frs"]');
+    const tabBeneficiary = document.querySelector('[data-tab="beneficiary"]');
     const tabSam = document.querySelector('[data-tab="sam"]');
     const tabMeasuring = document.querySelector('[data-tab="measuring"]');
+    const beneficiarySubTabsContainer = document.getElementById('beneficiary-sub-tabs');
+    const beneficiarySubTabs = document.querySelectorAll('.sub-tab-btn');
 
     // Multi-Upload UI Elements
     const singleDropZone = document.getElementById('drop-zone');
@@ -58,24 +65,52 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.remove('frs-theme');
             tabThr.classList.add('active');
             tabFrs.classList.remove('active');
+            if (tabBeneficiary) tabBeneficiary.classList.remove('active');
             tabSam.classList.remove('active');
+            if (tabMeasuring) tabMeasuring.classList.remove('active');
+
             singleDropZone.classList.remove('hidden');
             multiUploadContainer.classList.add('hidden');
+            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
 
             document.querySelectorAll('.thr-filter').forEach(el => el.classList.remove('hidden'));
             document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
             document.querySelector('.title-area p').textContent = "Reviewing Incomplete THR Tasks";
         } else if (reportType === 'frs') {
             document.body.classList.add('frs-theme');
             tabFrs.classList.add('active');
             tabThr.classList.remove('active');
+            if (tabBeneficiary) tabBeneficiary.classList.remove('active');
             tabSam.classList.remove('active');
+            if (tabMeasuring) tabMeasuring.classList.remove('active');
+
             singleDropZone.classList.remove('hidden');
             multiUploadContainer.classList.add('hidden');
+            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
 
             document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.frs-filter').forEach(el => el.classList.remove('hidden'));
+            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
             document.querySelector('.title-area p').textContent = "Reviewing Facial Recognition System (FRS) Details";
+        } else if (reportType === 'beneficiary') {
+            document.body.classList.remove('frs-theme');
+            if (tabBeneficiary) tabBeneficiary.classList.add('active');
+            tabThr.classList.remove('active');
+            tabFrs.classList.remove('active');
+            tabSam.classList.remove('active');
+            if (tabMeasuring) tabMeasuring.classList.remove('active');
+
+            singleDropZone.classList.remove('hidden');
+            multiUploadContainer.classList.add('hidden');
+            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.remove('hidden');
+
+            document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.remove('hidden'));
+            document.querySelector('.title-area p').textContent = "Reviewing Beneficiary Verification Status";
+
+            updateBeneficiarySubTabsUI();
         } else if (reportType === 'sam') {
             document.body.classList.add('frs-theme'); // Let's use the dark theme for SAM too
             tabSam.classList.add('active');
@@ -85,29 +120,57 @@ document.addEventListener('DOMContentLoaded', () => {
             // Swap upload zones
             singleDropZone.classList.add('hidden');
             multiUploadContainer.classList.remove('hidden');
+            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
 
             // Hide all standard sidebar filters (SAM relies on pure intersection)
             document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
             document.querySelector('.title-area p').textContent = "Identifying Recurring SAM/MAM Children (3-Month Match)";
         } else if (reportType === 'measuring') {
             document.body.classList.remove('frs-theme');
-            tabMeasuring.classList.add('active');
+            if (tabMeasuring) tabMeasuring.classList.add('active');
             tabThr.classList.remove('active');
             tabFrs.classList.remove('active');
+            if (tabBeneficiary) tabBeneficiary.classList.remove('active');
             tabSam.classList.remove('active');
 
             singleDropZone.classList.remove('hidden');
             multiUploadContainer.classList.add('hidden');
+            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
 
             document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
             document.querySelector('.title-area p').textContent = "Measuring Efficiency Review (Filters Incomplete Records)";
         }
     }
 
     tabThr.addEventListener('click', () => switchTab('thr'));
     tabFrs.addEventListener('click', () => switchTab('frs'));
+    if (tabBeneficiary) tabBeneficiary.addEventListener('click', () => switchTab('beneficiary'));
+
+    // Beneficiary Sub-Tab Switching
+    beneficiarySubTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            activeBeneficiarySubTab = btn.getAttribute('data-subtab');
+            updateBeneficiarySubTabsUI();
+            if (allLoadedData.length > 0) applyFilters();
+        });
+    });
+
+    function updateBeneficiarySubTabsUI() {
+        beneficiarySubTabs.forEach(btn => {
+            const indicator = btn.querySelector('.active-indicator');
+            if (btn.getAttribute('data-subtab') === activeBeneficiarySubTab) {
+                btn.style.color = 'white';
+                if (indicator) indicator.classList.remove('hidden');
+            } else {
+                btn.style.color = 'var(--text-muted)';
+                if (indicator) indicator.classList.add('hidden');
+            }
+        });
+    }
+
     tabSam.addEventListener('click', () => switchTab('sam'));
     if (tabMeasuring) tabMeasuring.addEventListener('click', () => switchTab('measuring'));
 
@@ -284,23 +347,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (data.reportType) {
                     activeReportType = data.reportType;
+
+                    // Reset all tabs
+                    tabThr.classList.remove('active');
+                    tabFrs.classList.remove('active');
+                    if (tabSam) tabSam.classList.remove('active');
+                    if (tabBeneficiary) tabBeneficiary.classList.remove('active');
+                    if (tabMeasuring) tabMeasuring.classList.remove('active');
+
+                    if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
+                    document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
+                    document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
+                    document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
+
                     if (activeReportType === 'thr') {
                         document.body.classList.remove('frs-theme');
                         tabThr.classList.add('active');
-                        tabFrs.classList.remove('active');
-                        tabSam.classList.remove('active');
                         document.querySelectorAll('.thr-filter').forEach(el => el.classList.remove('hidden'));
-                        document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
                         document.querySelector('.title-area p').textContent = "Reviewing Incomplete THR Tasks";
                     } else if (activeReportType === 'frs') {
                         document.body.classList.add('frs-theme');
                         tabFrs.classList.add('active');
-                        tabThr.classList.remove('active');
-                        tabSam.classList.remove('active');
-                        document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
                         document.querySelectorAll('.frs-filter').forEach(el => el.classList.remove('hidden'));
                         document.querySelector('.title-area p').textContent = "Reviewing Facial Recognition System (FRS) Details";
+                    } else if (activeReportType === 'beneficiary') {
+                        document.body.classList.remove('frs-theme');
+                        if (tabBeneficiary) tabBeneficiary.classList.add('active');
+                        if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.remove('hidden');
+                        document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.remove('hidden'));
+                        document.querySelector('.title-area p').textContent = "Reviewing Beneficiary Verification Status";
+                        updateBeneficiarySubTabsUI();
                     } else if (activeReportType === 'measuring') {
+                        document.body.classList.remove('frs-theme');
+                        if (tabMeasuring) tabMeasuring.classList.add('active');
+                        document.querySelector('.title-area p').textContent = "Measuring Efficiency Review (Filters Incomplete Records)";
                         renderMeasuringDashboard(data);
                         return;
                     }
@@ -334,7 +414,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectElem.innerHTML += `<option value="all">Any</option>`;
             }
 
-            // For status and opt-out, default selection might exist
             let hasDefaultInList = false;
 
             if (optionsList) {
@@ -346,16 +425,48 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        buildOptions(filterAwc, filters.awcNames, 'all', true);
+        const buildCheckboxes = (container, optionsList, defaultSelectedArr, mapPretty = null) => {
+            container.innerHTML = '';
+            container.innerHTML += `<label class="checkbox-item"><input type="checkbox" value="all" class="select-all-cb"> <strong>Select All</strong></label>`;
 
-        // Category multiple box - Pre-select the key groups
-        filterCategory.innerHTML = '';
+            if (optionsList) {
+                optionsList.forEach(opt => {
+                    const pretty = mapPretty ? (mapPretty[opt] || opt) : opt;
+                    const isSel = defaultSelectedArr.includes(opt) || defaultSelectedArr.includes('all') ? 'checked' : '';
+                    container.innerHTML += `<label class="checkbox-item"><input type="checkbox" value="${opt}" ${isSel} class="item-cb"> ${pretty}</label>`;
+                });
+            }
+
+            const selectAllCb = container.querySelector('.select-all-cb');
+            const itemCbs = container.querySelectorAll('.item-cb');
+
+            const updateSelectAllState = () => {
+                const allChecked = Array.from(itemCbs).every(cb => cb.checked);
+                selectAllCb.checked = allChecked && itemCbs.length > 0;
+            };
+            updateSelectAllState();
+
+            selectAllCb.addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                itemCbs.forEach(cb => cb.checked = isChecked);
+                applyFilters();
+            });
+
+            itemCbs.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    updateSelectAllState();
+                    applyFilters();
+                });
+            });
+        };
+
+        buildOptions(filterAwc, filters.awcNames, 'all', true);
+        buildOptions(filterSector, filters.sectors || [], 'all', true);
+
         let defaultSelectedCats = [];
         if (activeReportType === 'thr') {
             defaultSelectedCats = ['pregnant_woman', 'lactating_mother', 'children_6m_3y'];
         } else {
-            // For FRS, default to all specific children and women groups if we want to mimic, 
-            // but let's just pre-select children 6m-3y and 3y-6y as requested by example
             defaultSelectedCats = ['children_6m_3y', 'children_3y_6y', 'pregnant_woman', 'lactating_mother'];
         }
 
@@ -368,13 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'adolescent_girl': 'Adolescent Girl'
         };
 
-        if (filters.categories) {
-            filters.categories.forEach(opt => {
-                const pretty = prettyNames[opt] || opt;
-                const isSel = defaultSelectedCats.includes(opt) ? 'selected' : '';
-                filterCategory.innerHTML += `<option value="${opt}" ${isSel}>${pretty}</option>`;
-            });
-        }
+        buildCheckboxes(filterCategory, filters.categories, defaultSelectedCats, prettyNames);
 
         if (activeReportType === 'thr') {
             buildOptions(filterStatus, filters.statuses, 'active');
@@ -382,20 +487,20 @@ document.addEventListener('DOMContentLoaded', () => {
             buildOptions(filterThr, filters.thrDays, 'all');
             buildOptions(filterHcm, filters.hcmDays, 'all');
         } else if (activeReportType === 'frs') {
-            // FRS Multi-selects
-            buildOptions(filterFaceCaptured, filters.faceCaptured, 'all', true);
-            buildOptions(filterEkycDone, filters.ekycDone, 'all', true);
-            buildOptions(filterAadhaarMatching, filters.aadhaarFaceMatching, 'all', true);
+            buildCheckboxes(filterFaceCaptured, filters.faceCaptured, ['all']);
+            buildCheckboxes(filterEkycDone, filters.ekycDone, ['all']);
+            buildCheckboxes(filterAadhaarMatching, filters.aadhaarFaceMatching, ['all']);
         }
 
-        // Setup Event Listeners for instantly triggering filters on change
         const filterElements = [
-            filterAwc, filterCategory, filterStatus, filterOptOut, filterThr, filterHcm,
-            filterFaceCaptured, filterEkycDone, filterAadhaarMatching
+            filterAwc, filterStatus, filterOptOut, filterThr, filterHcm,
+            filterSector
         ];
 
+        filterSearch.removeEventListener('input', applyFilters);
+        filterSearch.addEventListener('input', applyFilters);
+
         filterElements.forEach(elem => {
-            // Avoid adding multiple listeners if we upload multiple times
             elem.removeEventListener('change', applyFilters);
             elem.addEventListener('change', applyFilters);
         });
@@ -404,7 +509,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Apply Local JS Filters ---
     function applyFilters() {
         const selAwc = filterAwc.value;
-        const selCats = Array.from(filterCategory.selectedOptions).map(opt => opt.value);
+        const selSector = filterSector.value;
+        const searchText = filterSearch.value.trim().toLowerCase();
+        const selCats = Array.from(filterCategory.querySelectorAll('input.item-cb:checked')).map(cb => cb.value);
 
         let filteredData = [];
 
@@ -451,9 +558,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderDashboard(totalTarget, givenCount, notGivenCount, currentIncompleteRows, catStatsMap);
 
         } else if (activeReportType === 'frs') {
-            const selFace = Array.from(filterFaceCaptured.selectedOptions).map(opt => opt.value);
-            const selEkyc = Array.from(filterEkycDone.selectedOptions).map(opt => opt.value);
-            const selAadhaar = Array.from(filterAadhaarMatching.selectedOptions).map(opt => opt.value);
+            const selFace = Array.from(filterFaceCaptured.querySelectorAll('input.item-cb:checked')).map(cb => cb.value);
+            const selEkyc = Array.from(filterEkycDone.querySelectorAll('input.item-cb:checked')).map(cb => cb.value);
+            const selAadhaar = Array.from(filterAadhaarMatching.querySelectorAll('input.item-cb:checked')).map(cb => cb.value);
 
             // 1. FILTERING
             filteredData = allLoadedData.filter(row => {
@@ -495,6 +602,38 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             renderDashboard(totalTarget, givenCount, notGivenCount, currentIncompleteRows, catStatsMap);
+        } else if (activeReportType === 'beneficiary') {
+            filteredData = allLoadedData.filter(row => {
+                if (selAwc !== 'all' && row.awcName !== selAwc) return false;
+                if (selSector !== 'all' && row.sectorName !== selSector) return false;
+                if (searchText && !row.name.toLowerCase().includes(searchText)) return false;
+                return true;
+            });
+
+            let totalTarget = filteredData.length;
+            let verifiedCount = 0;
+            let unverifiedCount = 0;
+            currentIncompleteRows = [];
+
+            filteredData.forEach(row => {
+                let isVerified = false;
+                if (activeBeneficiarySubTab === 'mobile') {
+                    isVerified = row.mobileStatus === 'verified';
+                } else if (activeBeneficiarySubTab === 'aadhaar') {
+                    isVerified = row.aadhaarStatus === 'verified_success';
+                } else if (activeBeneficiarySubTab === 'abha') {
+                    isVerified = row.abhaStatus !== 'not_verified'; // Covers anything except not_verified
+                }
+
+                if (isVerified) {
+                    verifiedCount++;
+                } else {
+                    unverifiedCount++;
+                    currentIncompleteRows.push(row);
+                }
+            });
+
+            renderDashboard(totalTarget, verifiedCount, unverifiedCount, currentIncompleteRows, null);
         }
     }
 
@@ -505,28 +644,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const stdDash = document.getElementById('standard-dashboard');
         const samDash = document.getElementById('sam-dashboard');
+        const benDash = document.getElementById('beneficiary-dashboard');
         const catBreakdown = document.querySelector('.category-breakdown');
 
         if (activeReportType === 'sam') {
             if (stdDash) stdDash.classList.add('hidden');
             if (samDash) samDash.classList.remove('hidden');
+            if (benDash) benDash.classList.add('hidden');
             if (catBreakdown) catBreakdown.classList.add('hidden');
+        } else if (activeReportType === 'beneficiary') {
+            if (stdDash) stdDash.classList.add('hidden');
+            if (samDash) samDash.classList.add('hidden');
+            if (benDash) benDash.classList.remove('hidden');
+            if (catBreakdown) catBreakdown.classList.add('hidden');
+
+            document.getElementById('stat-ben-total').textContent = totalTarget;
+            document.getElementById('stat-ben-verified').textContent = givenCount;
+            document.getElementById('stat-ben-unverified').textContent = notGivenCount;
+
+            // Adjust Titles based on sub-tab
+            const vTitle = document.getElementById('stat-ben-verified-title');
+            const uvTitle = document.getElementById('stat-ben-unverified-title');
+            if (activeBeneficiarySubTab === 'mobile') {
+                vTitle.textContent = "Mobile Verified";
+                uvTitle.textContent = "Mobile Not Verified";
+            } else if (activeBeneficiarySubTab === 'aadhaar') {
+                vTitle.textContent = "Aadhaar Verified";
+                uvTitle.textContent = "Aadhaar Not Verified";
+            } else if (activeBeneficiarySubTab === 'abha') {
+                vTitle.textContent = "ABHA ID Verified";
+                uvTitle.textContent = "ABHA ID Not Verified";
+            }
+
+            let percent = totalTarget === 0 ? 0 : Math.round((givenCount / totalTarget) * 100);
+            document.getElementById('stat-ben-percent').textContent = `${percent}%`;
+
         } else {
             if (stdDash) stdDash.classList.remove('hidden');
             if (samDash) samDash.classList.add('hidden');
+            if (benDash) benDash.classList.add('hidden');
             if (catBreakdown) catBreakdown.classList.remove('hidden');
-        }
 
-        // Update Overall Stats
-        document.getElementById('stat-total').textContent = totalTarget;
-        document.getElementById('stat-given').textContent = givenCount;
-        document.getElementById('stat-not-given').textContent = notGivenCount;
+            // Update Overall Stats for Standard View
+            document.getElementById('stat-total').textContent = totalTarget;
+            document.getElementById('stat-given').textContent = givenCount;
+            document.getElementById('stat-not-given').textContent = notGivenCount;
 
-        let percent = "0";
-        if (totalTarget > 0) {
-            percent = Math.round((givenCount / totalTarget) * 100);
+            let percent = "0";
+            if (totalTarget > 0) {
+                percent = Math.round((givenCount / totalTarget) * 100);
+            }
+            document.getElementById('stat-percent').textContent = `${percent}%`;
         }
-        document.getElementById('stat-percent').textContent = `${percent}%`;
 
         // Render Category Breakdown
         const catContainer = document.getElementById('category-stats-container');
@@ -600,6 +769,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 <th>M3 STATUS</th>
                 <th>SEVERE CATEGORY</th>
             `;
+        } else if (activeReportType === 'beneficiary') {
+            if (activeBeneficiarySubTab === 'mobile') {
+                thead.innerHTML = `
+                    <th>S.NO</th>
+                    <th>AWC NAME</th>
+                    <th>AWC CODE</th>
+                    <th>BENEFICIARY NAME</th>
+                    <th>CATEGORY</th>
+                    <th>MOBILE NUMBER</th>
+                    <th>MOBILE STATUS</th>
+                `;
+            } else if (activeBeneficiarySubTab === 'aadhaar') {
+                thead.innerHTML = `
+                    <th>S.NO</th>
+                    <th>AWC NAME</th>
+                    <th>AWC CODE</th>
+                    <th>BENEFICIARY NAME</th>
+                    <th>CATEGORY</th>
+                    <th>AADHAAR NUMBER</th>
+                    <th>AADHAAR STATUS</th>
+                `;
+            } else if (activeBeneficiarySubTab === 'abha') {
+                thead.innerHTML = `
+                    <th>S.NO</th>
+                    <th>AWC NAME</th>
+                    <th>AWC CODE</th>
+                    <th>BENEFICIARY NAME</th>
+                    <th>CATEGORY</th>
+                    <th>ABHA STATUS</th>
+                `;
+            }
         }
 
         // Render Table (Showing incomplete rows corresponding to the filters applied)
@@ -655,6 +855,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="color:var(--error); font-size:0.8rem; font-weight:600">${row.m3Status}</td>
                     <td><span style="background: rgba(239, 68, 68, 0.2); color: var(--error); padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">${row.severeCategory}</span></td>
                 `;
+            } else if (activeReportType === 'beneficiary') {
+                let slNoElement = `<td>${tbody.children.length + 1}</td>`;
+                let prettyCatSpan = `<span style="opacity: 0.8; font-size: 0.9em;">${prettyCat}</span>`;
+                if (activeBeneficiarySubTab === 'mobile') {
+                    tr.innerHTML = `
+                        ${slNoElement}
+                        <td>${row.awcName}</td>
+                        <td><strong>${row.awcCode}</strong></td>
+                        <td><strong>${row.name}</strong></td>
+                        <td>${prettyCatSpan}</td>
+                        <td>${row.mobileNumber}</td>
+                        <td><span class="status-badge inactive">${row.mobileStatus}</span></td>
+                    `;
+                } else if (activeBeneficiarySubTab === 'aadhaar') {
+                    tr.innerHTML = `
+                        ${slNoElement}
+                        <td>${row.awcName}</td>
+                        <td><strong>${row.awcCode}</strong></td>
+                        <td><strong>${row.name}</strong></td>
+                        <td>${prettyCatSpan}</td>
+                        <td>${row.aadhaarNumber}</td>
+                        <td><span class="status-badge inactive">${row.aadhaarStatus}</span></td>
+                    `;
+                } else if (activeBeneficiarySubTab === 'abha') {
+                    tr.innerHTML = `
+                        ${slNoElement}
+                        <td>${row.awcName}</td>
+                        <td><strong>${row.awcCode}</strong></td>
+                        <td><strong>${row.name}</strong></td>
+                        <td>${prettyCatSpan}</td>
+                        <td><span class="status-badge inactive">${row.abhaStatus}</span></td>
+                    `;
+                }
             }
             tbody.appendChild(tr);
         });
@@ -669,6 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let headingText = 'Top 10 AWC with Pending THR/HCM';
             if (activeReportType === 'frs') headingText = 'Top 10 AWC with Pending FRS Data';
             if (activeReportType === 'sam') headingText = 'Top 10 AWC with Recurring SAM Children';
+            if (activeReportType === 'beneficiary') headingText = 'Top 10 AWC with Unverified Beneficiaries';
             topAwcHeading.textContent = headingText;
 
             // Group by AWC code/name
@@ -708,10 +942,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const stdDash = document.getElementById('standard-dashboard');
         const samDash = document.getElementById('sam-dashboard');
+        const benDash = document.getElementById('beneficiary-dashboard');
         const catBreakdown = document.querySelector('.category-breakdown');
 
         if (stdDash) stdDash.classList.remove('hidden');
         if (samDash) samDash.classList.add('hidden');
+        if (benDash) benDash.classList.add('hidden');
         if (catBreakdown) catBreakdown.classList.add('hidden');
 
         let totalChildren = 0;
@@ -819,6 +1055,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeReportType === 'frs') titleText = 'FRS Pending Details';
         if (activeReportType === 'sam') titleText = 'SAM/MAM 3-Month Intersect Record';
         if (activeReportType === 'measuring') titleText = 'Measuring Efficiency Report';
+        if (activeReportType === 'beneficiary') {
+            if (activeBeneficiarySubTab === 'mobile') titleText = 'Beneficiary Mobile Unverified Report';
+            if (activeBeneficiarySubTab === 'aadhaar') titleText = 'Beneficiary Aadhaar Unverified Report';
+            if (activeBeneficiarySubTab === 'abha') titleText = 'Beneficiary ABHA ID Unverified Report';
+        }
         doc.text(titleText, 14, 22);
 
         doc.setFontSize(11);
@@ -833,6 +1074,10 @@ document.addEventListener('DOMContentLoaded', () => {
             headers = [['SECTOR NAME', 'AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'MOTHER NAME', 'DOB', 'GENDER', 'M1 STATUS', 'M2 STATUS', 'M3 STATUS', 'SEVERE CATEGORY']];
         } else if (activeReportType === 'measuring') {
             headers = [['S.No', 'AWC NAME', 'TOTAL ACTIVE', 'MEASURED', 'PENDING', 'COMPLETION %']];
+        } else if (activeReportType === 'beneficiary') {
+            if (activeBeneficiarySubTab === 'mobile') headers = [['S.NO', 'AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'CATEGORY', 'MOBILE NUMBER', 'MOBILE STATUS']];
+            if (activeBeneficiarySubTab === 'aadhaar') headers = [['S.NO', 'AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'CATEGORY', 'AADHAAR NUMBER', 'AADHAAR STATUS']];
+            if (activeBeneficiarySubTab === 'abha') headers = [['S.NO', 'AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'CATEGORY', 'ABHA STATUS']];
         }
 
         const data = rows.map(r => {
@@ -887,6 +1132,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     r.m3Status,
                     r.severeCategory
                 ];
+            } else if (activeReportType === 'beneficiary') {
+                const slNo = (rows.indexOf(r) + 1).toString();
+                if (activeBeneficiarySubTab === 'mobile') {
+                    return [slNo, r.awcName, r.awcCode, r.name, prettyCat, r.mobileNumber, r.mobileStatus];
+                } else if (activeBeneficiarySubTab === 'aadhaar') {
+                    return [slNo, r.awcName, r.awcCode, r.name, prettyCat, r.aadhaarNumber, r.aadhaarStatus];
+                } else if (activeBeneficiarySubTab === 'abha') {
+                    return [slNo, r.awcName, r.awcCode, r.name, prettyCat, r.abhaStatus];
+                }
             }
         });
 
@@ -901,6 +1155,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 4: { halign: 'center', textColor: [220, 38, 38] },
                 5: { halign: 'center', fontStyle: 'bold' }
             };
+        } else if (activeReportType === 'beneficiary') {
+            if (activeBeneficiarySubTab === 'mobile' || activeBeneficiarySubTab === 'aadhaar') {
+                colStyles = {
+                    0: { cellWidth: 15, halign: 'center' },
+                    1: { cellWidth: 40 },
+                    2: { cellWidth: 30 },
+                    3: { cellWidth: 45 },
+                    4: { cellWidth: 35 },
+                    5: { halign: 'center' },
+                    6: { halign: 'center', textColor: [220, 38, 38] }
+                };
+            } else if (activeBeneficiarySubTab === 'abha') {
+                colStyles = {
+                    0: { cellWidth: 15, halign: 'center' },
+                    1: { cellWidth: 45 },
+                    2: { cellWidth: 35 },
+                    3: { cellWidth: 55 },
+                    4: { cellWidth: 40 },
+                    5: { halign: 'center', textColor: [220, 38, 38] }
+                };
+            }
         } else if (activeReportType !== 'sam') {
             colStyles = {
                 0: { cellWidth: 25 },
@@ -919,7 +1194,10 @@ document.addEventListener('DOMContentLoaded', () => {
             startY: 40,
             theme: 'grid',
             headStyles: { fillColor: [15, 23, 42], textColor: 255 },
-            styles: { fontSize: activeReportType === 'sam' ? 6 : 9, cellPadding: 2 },
+            styles: {
+                fontSize: activeReportType === 'sam' ? 6 : (activeReportType === 'beneficiary' ? 11 : 9),
+                cellPadding: activeReportType === 'beneficiary' ? 3 : 2
+            },
             columnStyles: colStyles
         });
 

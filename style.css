@@ -143,7 +143,7 @@ body {
 }
 
 .filter-section {
-    padding: 1.5rem 2rem;
+    padding: 1rem 1.5rem;
     flex-grow: 1;
     overflow-y: auto;
 }
@@ -403,20 +403,39 @@ body {
     margin-bottom: 2rem;
 }
 
-.filter-group select[multiple] {
-    height: auto;
-    padding: 0.4rem;
-}
-
-.filter-group select[multiple] option {
+.checkbox-list {
+    max-height: 180px;
+    overflow-y: auto;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
     padding: 0.5rem;
-    border-radius: 4px;
-    margin-bottom: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
 }
 
-.filter-group select[multiple] option:checked {
-    background: var(--primary);
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    font-size: 0.85rem;
     color: white;
+    cursor: pointer;
+    padding: 0.2rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.checkbox-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.checkbox-item input[type="checkbox"] {
+    margin-right: 0.5rem;
+    cursor: pointer;
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
 }
 
 /* Stats Dashboard */

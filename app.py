@@ -20,50 +20,17 @@ def upload_file():
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
     
-    # Read as text replacing bad unicode chars
-    content = file.read().decode('utf-8', errors='replace')
-    lines = content.split('\n')
-    header_idx = -1
-    sector_name = "All Sectors" # Default if not found
-    
-    for i, line in enumerate(lines):
-        # Extract Sector Name if it exists in the preamble
-        lower_line = line.lower()
-        if 'sector' in lower_line:
-            parts = line.split(',')
-            for j, p in enumerate(parts):
-                if 'sector' in p.lower():
-                    # The value is usually in the next cell
-                    if j + 1 < len(parts) and parts[j+1].strip() != '':
-                        sector_name = parts[j+1].strip()
-                        break
-                    # Sometimes it's in the same cell: "Sector Name : Foo"
-                    elif ':' in p or '-' in p:
-                        split_char = ':' if ':' in p else '-'
-                        val = p.split(split_char, 1)[-1].strip()
-                        if val and val.lower() != 'sector' and val.lower() != 'sector name':
-                            sector_name = val
-                        break
-                        
-        # We find the real header line which contains AWC NAME
-        if 'AWC NAME' in line.upper() and 'BENEFICIARY NAME' in line.upper():
-            header_idx = i
-            break
-            
-    if header_idx == -1:
-        return jsonify({'error': 'Could not find header row containing AWC NAME and BENEFICIARY NAME. Is this a valid Poshan Tracker file?'}), 400
-        
-    try:
-        # Pandas is incredibly robust for parsing all rows exactly
-        df = pd.read_csv(io.StringIO(content), skiprows=header_idx, dtype=str)
-    except Exception as e:
-        return jsonify({'error': f'Failed to parse CSV: {str(e)}'}), 400
-        
-    df.columns = df.columns.str.strip().str.upper()
+    df, sector_name = read_pt_data(file)
+    if df is None:
+        # read_pt_data returns None, error_msg
+        return jsonify({'error': f'Failed to parse file: {sector_name}'}), 400
     
     # Determine Report Type based on columns
     report_type = 'thr'
-    if 'FACE CAPTURED' in df.columns or 'EKYC DONE' in df.columns:
+    cols = [str(c) for c in df.columns]
+    if any('ABHA ID' in c for c in cols) or any('MOBILE VERIFICATION' in c for c in cols):
+        report_type = 'beneficiary'
+    elif any('FACE CAPTURED' in c for c in cols) or any('EKYC DONE' in c for c in cols):
         report_type = 'frs'
 
     all_data = []
@@ -142,6 +109,35 @@ def upload_file():
                 'faceCaptured': str(row['FACE CAPTURED']),
                 'ekycDone': str(row['EKYC DONE']),
                 'aadhaarFaceMatching': str(row['AADHAAR FACE MATCHING'])
+            })
+            
+    elif report_type == 'beneficiary':
+        non_empty['PROJECT'] = non_empty.get('PROJECT', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        non_empty['SECTOR'] = non_empty.get('SECTOR', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        non_empty['GUARDIAN'] = non_empty.get('MOTHER\'S /FATHER\'S /GUARDIAN/HUSBAND NAME', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        non_empty['MOBILE NUMBER'] = non_empty.get('MOBILE NUMBER', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        non_empty['MOBILE VERIFICATION STATUS'] = non_empty.get('MOBILE VERIFICATION STATUS', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        non_empty['AADHAAR NUMBER'] = non_empty.get('AADHAAR NUMBER', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        non_empty['AADHAAR VERIFICATION STATUS'] = non_empty.get('AADHAAR VERIFICATION STATUS', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        non_empty['ABHA ID VERIFIED/UNVERIFIED'] = non_empty.get('ABHA ID VERIFIED/UNVERIFIED', pd.Series([''] * len(non_empty))).astype(str).str.strip()
+        
+        # In beneficiary reports, sector is available per row, override global sector filters
+        filters['sectors'] = sorted(list(set([str(x).title() for x in non_empty['SECTOR'].unique() if str(x).strip() not in ['nan', '']])))
+
+        for _, row in non_empty.iterrows():
+            all_data.append({
+                'project': str(row['PROJECT']).title(),
+                'sectorName': str(row['SECTOR']).title(),
+                'awcName': str(row.get('AWC NAME', '')).title().strip(),
+                'awcCode': str(row.get('AWC CODE', '')),
+                'name': str(row.get('BENEFICIARY NAME', '')).title(),
+                'category': str(row['BENEFICIARY TYPE']),
+                'guardian': str(row['GUARDIAN']).title(),
+                'mobileNumber': str(row['MOBILE NUMBER']),
+                'mobileStatus': str(row['MOBILE VERIFICATION STATUS']).lower(),
+                'aadhaarNumber': str(row['AADHAAR NUMBER']),
+                'aadhaarStatus': str(row['AADHAAR VERIFICATION STATUS']).lower(),
+                'abhaStatus': str(row['ABHA ID VERIFIED/UNVERIFIED']).lower()
             })
 
     return jsonify({
