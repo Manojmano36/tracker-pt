@@ -6,6 +6,22 @@ import json
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def handle_options(path):
+    response = jsonify({'status': 'ok'})
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -474,47 +490,97 @@ def upload_multi_inner():
         'intersectedData': all_data
     })
 
+# ─── DEBUG: inspect columns in an uploaded file ──────────────────────
+@app.route('/debug-columns', methods=['POST'])
+def debug_columns():
+    try:
+        f = request.files.get('file')
+        if not f:
+            return jsonify({'error': 'No file uploaded'}), 400
+        df, sector = read_pt_data(f)
+        if df is None:
+            return jsonify({'error': sector}), 400
+        return jsonify({'columns': list(df.columns), 'rows': len(df), 'sector': sector, 'sample': df.head(3).fillna('').to_dict(orient='records')})
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+# ─── COMPARISON REPORT ────────────────────────────────────────────────
 @app.route('/upload-comparison', methods=['POST'])
 def upload_comparison():
     try:
         return upload_comparison_inner()
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Server Error Processing Comparison: {str(e)}'}), 500
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 def upload_comparison_inner():
+    import traceback
+
     if 'file_old' not in request.files or 'file_new' not in request.files:
         return jsonify({'error': 'Please upload exactly 2 files: Old Month and New Month.'}), 400
-        
+
     df_old, s_old = read_pt_data(request.files['file_old'])
     df_new, s_new = read_pt_data(request.files['file_new'])
-    
     if df_old is None or df_new is None:
         return jsonify({'error': 'One or more files have an invalid format or could not be parsed.'}), 400
 
-    merge_keys = ['AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'MOTHER NAME', 'DOB', 'GENDER']
-    
-    for key in merge_keys:
-        if key not in df_old.columns: return jsonify({'error': f'Missing necessary column in Old Month file: {key}'}), 400
-        if key not in df_new.columns: return jsonify({'error': f'Missing necessary column in New Month file: {key}'}), 400
+    # ── Flexible MOTHER NAME column detection ──────────────────────────────
+    def find_mother_col(df):
+        for c in df.columns:
+            cu = str(c).upper()
+            if 'MOTHER' in cu and 'NAME' in cu:
+                return c
+        # fallback: any guardian/parent column
+        for c in df.columns:
+            cu = str(c).upper()
+            if 'GUARDIAN' in cu or 'PARENT' in cu or 'FATHER' in cu or 'HUSBAND' in cu:
+                return c
+        return None
 
-    for key in merge_keys:
-        df_old[key] = df_old[key].astype(str).str.strip().str.upper()
-        df_new[key] = df_new[key].astype(str).str.strip().str.upper()
+    mother_col_old = find_mother_col(df_old)
+    mother_col_new = find_mother_col(df_new)
 
+    if mother_col_old:
+        df_old['MOTHER NAME'] = df_old[mother_col_old].astype(str).str.strip().str.upper()
+    else:
+        df_old['MOTHER NAME'] = ''
+
+    if mother_col_new:
+        df_new['MOTHER NAME'] = df_new[mother_col_new].astype(str).str.strip().str.upper()
+    else:
+        df_new['MOTHER NAME'] = ''
+
+    # ── Merge keys: AWC NAME, AWC CODE, BENEFICIARY NAME, MOTHER NAME, DOB ─
+    merge_keys = ['AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'MOTHER NAME', 'DOB']
+
+    for key in ['AWC NAME', 'AWC CODE', 'BENEFICIARY NAME', 'DOB']:
+        if key not in df_old.columns:
+            return jsonify({'error': f'Missing necessary column in Old Month file: {key}'}), 400
+        if key not in df_new.columns:
+            return jsonify({'error': f'Missing necessary column in New Month file: {key}'}), 400
+
+    # Normalize all key columns aggressively
+    for key in merge_keys:
+        df_old[key] = df_old[key].astype(str).str.strip().str.upper().str.replace(r'\s+', ' ', regex=True)
+        df_new[key] = df_new[key].astype(str).str.strip().str.upper().str.replace(r'\s+', ' ', regex=True)
+
+    # ── Extract metric columns (weight, height, nutrition status) ───────────
     def extract_metrics(df):
-        wt_col = next((c for c in df.columns if 'WEIGHT' in str(c).upper() and '%' not in str(c).upper()), None)
-        ht_col = next((c for c in df.columns if 'HEIGHT' in str(c).upper() and '%' not in str(c).upper()), None)
+        wt_col = next((c for c in df.columns if 'WEIGHT' in str(c).upper() and '%' not in str(c).upper() and '__' not in str(c)), None)
+        ht_col = next((c for c in df.columns if 'HEIGHT' in str(c).upper() and '%' not in str(c).upper() and '__' not in str(c)), None)
         st_col = next((c for c in df.columns if 'STUNTED' in str(c).upper()), None)
         wa_col = next((c for c in df.columns if 'WASTED' in str(c).upper()), None)
         uw_col = next((c for c in df.columns if 'UNDERWEIGHT' in str(c).upper()), None)
-        
-        df['__WEIGHT'] = df[wt_col] if wt_col else ''
-        df['__HEIGHT'] = df[ht_col] if ht_col else ''
-        df['__STUNTED'] = df[st_col] if st_col else ''
-        df['__WASTED'] = df[wa_col] if wa_col else ''
-        df['__UNDERWEIGHT'] = df[uw_col] if uw_col else ''
+        gd_col = next((c for c in df.columns if str(c).upper().strip() == 'GENDER'), None)
+
+        df['__WEIGHT'] = df[wt_col].astype(str).str.strip() if wt_col else ''
+        df['__HEIGHT'] = df[ht_col].astype(str).str.strip() if ht_col else ''
+        df['__STUNTED'] = df[st_col].astype(str).str.strip() if st_col else ''
+        df['__WASTED'] = df[wa_col].astype(str).str.strip() if wa_col else ''
+        df['__UNDERWEIGHT'] = df[uw_col].astype(str).str.strip() if uw_col else ''
+        df['__GENDER'] = df[gd_col].astype(str).str.strip() if gd_col else ''
         return df
 
     df_old = extract_metrics(df_old)
@@ -546,21 +612,40 @@ def upload_comparison_inner():
         return ", ".join(cat) if cat else "Normal"
 
     for _, row in merged.iterrows():
-        o_w = str(row['__WEIGHT_OLD']).replace('nan', '').strip()
-        o_h = str(row['__HEIGHT_OLD']).replace('nan', '').strip()
-        n_w = str(row['__WEIGHT_NEW']).replace('nan', '').strip()
-        n_h = str(row['__HEIGHT_NEW']).replace('nan', '').strip()
+        o_w = str(row.get('__WEIGHT_OLD', '')).replace('nan', '').strip()
+        o_h = str(row.get('__HEIGHT_OLD', '')).replace('nan', '').strip()
+        n_w = str(row.get('__WEIGHT_NEW', '')).replace('nan', '').strip()
+        n_h = str(row.get('__HEIGHT_NEW', '')).replace('nan', '').strip()
 
         if (n_w and n_w != o_w) or (n_h and n_h != o_h):
             updated_count += 1
 
-        cat = get_nutrition_category(row['__STUNTED_NEW'], row['__WASTED_NEW'], row['__UNDERWEIGHT_NEW'])
-        
-        sector = str(row.get('SECTOR_NEW', s_new)).title()
-        if sector.lower() == 'nan': sector = s_new.title()
-        
-        btype = str(row.get('BENEFICIARY TYPE_NEW', row.get('BENEFICIARY CATEGORY_NEW', ''))).title()
-        if btype.lower() == 'nan': btype = ''
+        cat = get_nutrition_category(
+            row.get('__STUNTED_NEW', ''),
+            row.get('__WASTED_NEW', ''),
+            row.get('__UNDERWEIGHT_NEW', '')
+        )
+
+        # Safely get sector (may or may not exist)
+        sector = ''
+        for sc in ['SECTOR NAME_NEW', 'SECTOR_NEW', 'SECTOR NAME_OLD', 'SECTOR_OLD']:
+            v = str(row.get(sc, '')).strip()
+            if v and v.lower() != 'nan':
+                sector = v.title()
+                break
+        if not sector:
+            sector = (s_new or s_old or '').title()
+
+        # Beneficiary type
+        btype = ''
+        for bt in ['BENEFICIARY TYPE_NEW', 'BENEFICIARY CATEGORY_NEW', 'BENEFICIARY TYPE_OLD', 'BENEFICIARY CATEGORY_OLD']:
+            v = str(row.get(bt, '')).strip()
+            if v and v.lower() != 'nan':
+                btype = v.title()
+                break
+
+        # Gender
+        gender = str(row.get('__GENDER_NEW', row.get('__GENDER_OLD', ''))).replace('nan','').strip().title()
 
         all_data.append({
             'sectorName': sector,
@@ -569,7 +654,7 @@ def upload_comparison_inner():
             'name': str(row['BENEFICIARY NAME']).title(),
             'motherName': str(row['MOTHER NAME']).title(),
             'dob': str(row['DOB']),
-            'gender': str(row['GENDER']).title(),
+            'gender': gender,
             'category': btype,
             'oldWeight': o_w,
             'oldHeight': o_h,

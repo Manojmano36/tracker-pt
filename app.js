@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const BASE_URL = 'http://localhost:5000';
+    const minDaysTarget = 21; // THR completion threshold (21 days)
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('csv-file-input');
 
@@ -46,11 +48,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const multiUploadContainer = document.getElementById('multi-upload-container');
 
     // Tab Switching Logic
+    function switchInfoCard(type) {
+        const allInfoCards = document.querySelectorAll('.info-card');
+        allInfoCards.forEach(c => c.classList.add('hidden'));
+        const target = document.getElementById('info-' + type);
+        if (target) target.classList.remove('hidden');
+    }
+
     function switchTab(reportType) {
         if (activeReportType === reportType) return;
         activeReportType = reportType;
+        switchInfoCard(reportType);
 
-        // Reset UI State
+        // ── 1. Clear ALL tab active states in one sweep ─────────────────
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+        // ── 2. Reset shared UI ───────────────────────────────────────────
         resultsSection.classList.add('hidden');
         const sidebar = document.getElementById('app-sidebar');
         if (sidebar) sidebar.classList.add('hidden');
@@ -58,90 +71,70 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInput.value = '';
         allLoadedData = [];
 
+        // Hide comparison panels by default (re-shown only for comparison tab)
+        const _compUpload = document.getElementById('comparison-upload-container');
+        const _compResults = document.getElementById('comparison-results');
+        if (_compUpload) _compUpload.classList.add('hidden');
+        if (_compResults) _compResults.classList.add('hidden');
+
         // Reset multi-files
         resetMultiFiles();
 
+        // Hide all filter groups
+        document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
+        if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
+
+        // ── 3. Tab-specific setup ────────────────────────────────────────
         if (reportType === 'thr') {
             document.body.classList.remove('frs-theme');
             tabThr.classList.add('active');
-            tabFrs.classList.remove('active');
-            if (tabBeneficiary) tabBeneficiary.classList.remove('active');
-            tabSam.classList.remove('active');
-            if (tabMeasuring) tabMeasuring.classList.remove('active');
-
             singleDropZone.classList.remove('hidden');
             multiUploadContainer.classList.add('hidden');
-            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
-
             document.querySelectorAll('.thr-filter').forEach(el => el.classList.remove('hidden'));
-            document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
             document.querySelector('.title-area p').textContent = "Reviewing Incomplete THR Tasks";
+
         } else if (reportType === 'frs') {
             document.body.classList.add('frs-theme');
             tabFrs.classList.add('active');
-            tabThr.classList.remove('active');
-            if (tabBeneficiary) tabBeneficiary.classList.remove('active');
-            tabSam.classList.remove('active');
-            if (tabMeasuring) tabMeasuring.classList.remove('active');
-
             singleDropZone.classList.remove('hidden');
             multiUploadContainer.classList.add('hidden');
-            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
-
-            document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.frs-filter').forEach(el => el.classList.remove('hidden'));
-            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
             document.querySelector('.title-area p').textContent = "Reviewing Facial Recognition System (FRS) Details";
+
         } else if (reportType === 'beneficiary') {
             document.body.classList.remove('frs-theme');
             if (tabBeneficiary) tabBeneficiary.classList.add('active');
-            tabThr.classList.remove('active');
-            tabFrs.classList.remove('active');
-            tabSam.classList.remove('active');
-            if (tabMeasuring) tabMeasuring.classList.remove('active');
-
             singleDropZone.classList.remove('hidden');
             multiUploadContainer.classList.add('hidden');
             if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.remove('hidden');
-
-            document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.remove('hidden'));
             document.querySelector('.title-area p').textContent = "Reviewing Beneficiary Verification Status";
-
             updateBeneficiarySubTabsUI();
-        } else if (reportType === 'sam') {
-            document.body.classList.add('frs-theme'); // Let's use the dark theme for SAM too
-            tabSam.classList.add('active');
-            tabThr.classList.remove('active');
-            tabFrs.classList.remove('active');
 
-            // Swap upload zones
+        } else if (reportType === 'sam') {
+            document.body.classList.add('frs-theme');
+            tabSam.classList.add('active');
             singleDropZone.classList.add('hidden');
             multiUploadContainer.classList.remove('hidden');
-            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
+            document.querySelector('.title-area p').textContent = "Identifying Recurring Severe Children (3-Month Match)";
 
-            // Hide all standard sidebar filters (SAM relies on pure intersection)
-            document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
-            document.querySelector('.title-area p').textContent = "Identifying Recurring SAM/MAM Children (3-Month Match)";
         } else if (reportType === 'measuring') {
             document.body.classList.remove('frs-theme');
             if (tabMeasuring) tabMeasuring.classList.add('active');
-            tabThr.classList.remove('active');
-            tabFrs.classList.remove('active');
-            if (tabBeneficiary) tabBeneficiary.classList.remove('active');
-            tabSam.classList.remove('active');
-
             singleDropZone.classList.remove('hidden');
             multiUploadContainer.classList.add('hidden');
-            if (beneficiarySubTabsContainer) beneficiarySubTabsContainer.classList.add('hidden');
-
-            document.querySelectorAll('.thr-filter').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.frs-filter').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.beneficiary-filter').forEach(el => el.classList.add('hidden'));
             document.querySelector('.title-area p').textContent = "Measuring Efficiency Review (Filters Incomplete Records)";
+
+        } else if (reportType === 'comparison') {
+            document.body.classList.remove('frs-theme');
+            const tabComparison = document.querySelector('[data-tab="comparison"]');
+            if (tabComparison) tabComparison.classList.add('active');
+            singleDropZone.classList.add('hidden');
+            multiUploadContainer.classList.add('hidden');
+            if (_compUpload) _compUpload.classList.remove('hidden');
+            document.querySelector('.title-area p').textContent = "Compare Two Monthly Growth Monitoring Reports";
         }
     }
 
@@ -255,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('file2', filesMulti.m2);
         formData.append('file3', filesMulti.m3);
 
-        fetch('/upload-multi', {
+        fetch(BASE_URL + '/upload-multi', {
             method: 'POST',
             body: formData
         })
@@ -332,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const endpoint = activeReportType === 'measuring' ? '/upload-measuring' : '/upload';
 
-        fetch(endpoint, {
+        fetch(BASE_URL + endpoint, {
             method: 'POST',
             body: formData
         })
@@ -1213,8 +1206,12 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInput.value = ''; // clear input
         allLoadedData = [];
         // Also hide comparison section if visible
-        const compResults = document.getElementById('comparison-results');
-        if (compResults) compResults.classList.add('hidden');
+        document.getElementById('comparison-results').classList.add('hidden');
+        document.getElementById('comparison-upload-container').classList.add('hidden');
+        // Restore normal single drop zone when resetting from comparison tab
+        if (activeReportType === 'comparison') {
+            document.getElementById('drop-zone').classList.remove('hidden');
+        }
     });
 
     // ============================================================
@@ -1237,43 +1234,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let compTableData = [];
 
     if (tabComparison) {
-        tabComparison.addEventListener('click', () => {
-            if (activeReportType === 'comparison') return;
-            activeReportType = 'comparison';
-
-            // Reset UI
-            resultsSection.classList.add('hidden');
-            compResults.classList.add('hidden');
-            const sidebar = document.getElementById('app-sidebar');
-            if (sidebar) sidebar.classList.add('hidden');
-
-            // Switch upload zone
-            document.getElementById('drop-zone').classList.add('hidden');
-            document.getElementById('multi-upload-container').classList.add('hidden');
-            compUploadContainer.classList.remove('hidden');
-            uploadSection.classList.remove('hidden');
-
-            // Switch tab highlight
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            tabComparison.classList.add('active');
-
-            // Hide beneficiary sub-tabs
-            const subTabs = document.getElementById('beneficiary-sub-tabs');
-            if (subTabs) subTabs.classList.add('hidden');
-
-            document.querySelector('.title-area p').textContent = 'Compare Two Monthly Growth Monitoring Reports';
-        });
+        tabComparison.addEventListener('click', () => switchTab('comparison'));
     }
-
-    // When user switches AWAY from Comparison, restore the normal upload zone
-    document.querySelectorAll('.tab-btn:not([data-tab="comparison"])').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (activeReportType !== 'comparison') return;
-            compUploadContainer.classList.add('hidden');
-            compResults.classList.add('hidden');
-            document.getElementById('drop-zone').classList.remove('hidden');
-        });
-    });
 
     // File selection helpers
     function setupCompZone(zone, input, statusEl, slot) {
@@ -1319,7 +1281,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fd.append('file_old', compOldFile);
             fd.append('file_new', compNewFile);
 
-            fetch('/upload-comparison', { method: 'POST', body: fd })
+            fetch(BASE_URL + '/upload-comparison', { method: 'POST', body: fd })
                 .then(r => r.json())
                 .then(data => {
                     loadingSection.classList.add('hidden');
@@ -1339,9 +1301,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     compTableData = data.tableData || [];
                     renderCompTable(compTableData);
 
+                    // Show comparison results (its own isolated section, NOT results-section)
                     compResults.classList.remove('hidden');
+                    // Also show upload section again so user can upload another pair if needed
+                    compUploadContainer.classList.remove('hidden');
                     uploadSection.classList.remove('hidden');
-                    compUploadContainer.classList.add('hidden');
                 })
                 .catch(err => {
                     loadingSection.classList.add('hidden');
@@ -1355,31 +1319,48 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderCompTable(rows) {
         const tbody = document.getElementById('comparison-table-body');
         if (!tbody) return;
-        tbody.innerHTML = '';
-        if (!rows.length) {
+
+        if (!rows || !rows.length) {
             tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding: 2rem; color: var(--text-muted);">No matching children found between the two files.</td></tr>';
             return;
         }
-        rows.forEach((row, i) => {
-            const catColor = row.nutritionCategory === 'Normal' ? '#10b981'
+
+        // Show row count badge
+        const heading = document.querySelector('#comparison-results h3');
+        if (heading) heading.textContent = `📊 Comparison Report — ${rows.length} Matched Children`;
+
+        // Cap at 500 rows to prevent browser freeze on huge files
+        const MAX_ROWS = 500;
+        const displayRows = rows.slice(0, MAX_ROWS);
+
+        // Build full HTML as ONE string, then set innerHTML once (no += per row)
+        const parts = [];
+        displayRows.forEach((row, i) => {
+            const catColor = !row.nutritionCategory || row.nutritionCategory === 'Normal' ? '#10b981'
                 : row.nutritionCategory.includes('Severe') || row.nutritionCategory.includes('SAM') ? '#ef4444'
                     : '#f59e0b';
-            tbody.innerHTML += `<tr>
+            parts.push(`<tr>
                 <td>${i + 1}</td>
-                <td>${row.sectorName || ''}</td>
                 <td>${row.awcName || ''}</td>
                 <td>${row.awcCode || ''}</td>
                 <td><strong>${row.name || ''}</strong></td>
                 <td>${row.motherName || ''}</td>
                 <td>${row.dob || ''}</td>
-                <td>${row.gender || ''}</td>
                 <td>${row.oldWeight || '-'}</td>
                 <td>${row.oldHeight || '-'}</td>
                 <td><strong>${row.newWeight || '-'}</strong></td>
                 <td><strong>${row.newHeight || '-'}</strong></td>
                 <td><span style="color:${catColor}; font-weight:600;">${row.nutritionCategory || '-'}</span></td>
-            </tr>`;
+            </tr>`);
         });
+
+        if (rows.length > MAX_ROWS) {
+            parts.push(`<tr><td colspan="11" style="text-align:center; padding: 1rem; color: #f59e0b; font-weight:600;">
+                Showing first ${MAX_ROWS} of ${rows.length} matched records. Download PDF to see all.
+            </td></tr>`);
+        }
+
+        tbody.innerHTML = parts.join('');
     }
 
     // Download PDF for comparison

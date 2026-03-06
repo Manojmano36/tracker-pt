@@ -110,9 +110,9 @@
                     <button class="tab-btn active" data-tab="thr">THR</button>
                     <button class="tab-btn" data-tab="frs">FRS</button>
                     <button class="tab-btn" data-tab="beneficiary">Beneficiary</button>
-                    <button class="tab-btn" data-tab="sam">3-Month SAM</button>
+                    <button class="tab-btn" data-tab="sam">3 Month Severe</button>
                     <button class="tab-btn" data-tab="measuring">Measuring</button>
-                    <button class="tab-btn" data-tab="comparison">📊 Comparison</button>
+                    <button class="tab-btn" data-tab="comparison">⚖ 2 Excel Comparison</button>
                 </div>
             </header>
 
@@ -206,6 +206,186 @@
                         style="width:100%; margin-top: 1.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 1rem; font-size: 1.1rem; border-radius: 8px; cursor: pointer; font-weight: 600;">🔍
                         Run Comparison</button>
                 </div>
+
+                <!-- ─── Per-Tab Info Cards ─────────────────────────────── -->
+                <div class="info-cards-wrapper">
+
+                    <!-- THR Info -->
+                    <div class="info-card" id="info-thr">
+                        <div class="info-card-header">
+                            <span class="info-icon">📋</span>
+                            <strong>THR Report — How It Works</strong>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">📁 Upload</span>
+                                <span>Single THR Excel / CSV file from POSHAN Tracker</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔢 Calculation</span>
+                                <span>Beneficiaries with <strong>THR Days + HCM Days &lt; 25</strong> are marked
+                                    <em>Incomplete</em></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔑 Key Columns</span>
+                                <span>AWC NAME · BENEFICIARY NAME · STATUS · SNP OPT-OUT · NO. OF DAYS THR PROVIDED ·
+                                    NO. OF DAYS HCM PROVIDED</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">✅ Complete If</span>
+                                <span>Total (THR + HCM) days ≥ 25</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FRS Info -->
+                    <div class="info-card hidden" id="info-frs">
+                        <div class="info-card-header">
+                            <span class="info-icon">🤳</span>
+                            <strong>FRS Report — How It Works</strong>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">📁 Upload</span>
+                                <span>Single FRS Excel / CSV file from POSHAN Tracker</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔢 Calculation</span>
+                                <span>Beneficiary is <em>Incomplete</em> if any of the 3 fields is NOT
+                                    <strong>Yes</strong></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔑 Key Columns</span>
+                                <span>AWC NAME · BENEFICIARY NAME · BENEFICIARY CATEGORY · FACE CAPTURED · EKYC DONE ·
+                                    AADHAAR FACE MATCHING</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">✅ Complete If</span>
+                                <span>Face Captured = Yes AND eKYC Done = Yes AND Aadhaar Face Matching = Yes</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Beneficiary Info -->
+                    <div class="info-card hidden" id="info-beneficiary">
+                        <div class="info-card-header">
+                            <span class="info-icon">👤</span>
+                            <strong>Beneficiary Report — How It Works</strong>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">📁 Upload</span>
+                                <span>Single Beneficiary Excel / CSV file from POSHAN Tracker</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔢 Calculation</span>
+                                <span>Switch between <strong>Mobile</strong>, <strong>Aadhaar</strong>, and <strong>ABHA
+                                        ID</strong> verification tabs to see unverified records</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔑 Key Columns</span>
+                                <span>MOBILE NUMBER · MOBILE VERIFICATION STATUS · AADHAAR NUMBER · AADHAAR VERIFICATION
+                                    STATUS · ABHA ID VERIFIED/UNVERIFIED</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">✅ Complete If</span>
+                                <span>Mobile: Verified · Aadhaar: Verified Success · ABHA: Any status except Not
+                                    Verified</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SAM / 3 Month Severe Info -->
+                    <div class="info-card hidden" id="info-sam">
+                        <div class="info-card-header">
+                            <span class="info-icon">📊</span>
+                            <strong>3 Month Severe — How It Works</strong>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">📁 Upload</span>
+                                <span>3 separate Growth Monitoring Excel files — Month 1 (oldest) → Month 2 → Month 3
+                                    (newest)</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔢 Calculation</span>
+                                <span>Children who appear as <strong>SAM / Severely Stunted / Severely
+                                        Underweight</strong> in ALL 3 months are listed</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔗 Matching Criteria</span>
+                                <span>AWC NAME · AWC CODE · BENEFICIARY NAME · MOTHER NAME · DOB (all must match across
+                                    3 files)</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">⚠ Note</span>
+                                <span>Ensure names/DOB are consistent across all 3 files — any mismatch will exclude the
+                                    child</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Measuring Info -->
+                    <div class="info-card hidden" id="info-measuring">
+                        <div class="info-card-header">
+                            <span class="info-icon">⚖️</span>
+                            <strong>Measuring Report — How It Works</strong>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">📁 Upload</span>
+                                <span>Single Measuring Efficiency Excel file from POSHAN Tracker</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔢 Calculation</span>
+                                <span>AWCs where <strong>Measured Children &lt; Total Active Children</strong> are shown
+                                    with their completion %</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔑 Key Columns</span>
+                                <span>AWC NAME · TOTAL ACTIVE CHILDREN · TOTAL ACTIVE CHILDREN MEASURED</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">✅ Complete If</span>
+                                <span>Measured = Total (100% completion) — only incomplete AWCs appear in the
+                                    table</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Comparison Info -->
+                    <div class="info-card hidden" id="info-comparison">
+                        <div class="info-card-header">
+                            <span class="info-icon">🔄</span>
+                            <strong>2 Excel Comparison — How It Works</strong>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">📁 Upload</span>
+                                <span>2 Growth Monitoring Excel files — <strong>Old Month</strong> (previous) and
+                                    <strong>New Month</strong> (current)</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔢 Calculation</span>
+                                <span>Matches same child across both files and shows <strong>Old vs New Weight &amp;
+                                        Height</strong> side by side</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">🔗 Matching Criteria</span>
+                                <span>AWC NAME · AWC CODE · BENEFICIARY NAME · MOTHER NAME · DOB (all 5 must match
+                                    exactly)</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">⚠ Note</span>
+                                <span>Spellings, spaces, and DOB format must be identical in both files for a child to
+                                    appear in results</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <!-- ─────────────────────────────────────────────────────── -->
+
             </section>
 
             <section id="loading-section" class="card hidden">
@@ -412,61 +592,59 @@
                         <!-- Top 10 items will be injected here -->
                     </ul>
                 </div>
-                <!-- Comparison Results Section (hidden by default) -->
-                <div id="comparison-results" class="hidden">
-                    <div class="summary-dashboard" id="comparison-dashboard" style="margin-bottom: 1.5rem;">
-                        <div class="stat-box neutral-box">
-                            <h3>Total (Old Month)</h3>
-                            <p id="stat-comp-old">0</p>
-                        </div>
-                        <div class="stat-box neutral-box">
-                            <h3>Total (New Month)</h3>
-                            <p id="stat-comp-new">0</p>
-                        </div>
-                        <div class="stat-box success-box">
-                            <h3>Matched Children</h3>
-                            <p id="stat-comp-matched">0</p>
-                        </div>
-                        <div class="stat-box error-box">
-                            <h3>Height/Weight Updated</h3>
-                            <p id="stat-comp-updated">0</p>
-                        </div>
+
+            </section>
+
+            <!-- ===== COMPARISON RESULTS (own isolated section, never shown with other tabs) ===== -->
+            <section id="comparison-results" class="hidden fade-in results-wrapper" style="padding: 0;">
+                <div class="summary-dashboard" style="margin-bottom: 1.5rem;">
+                    <div class="stat-box neutral-box">
+                        <h3>Total (Old Month)</h3>
+                        <p id="stat-comp-old">0</p>
                     </div>
-                    <div class="table-card">
-                        <div class="table-header"
-                            style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3>📊 Comparison Report - Matched Children</h3>
-                            <button id="comp-download-btn"
-                                style="background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                                ⬇ Download PDF
-                            </button>
-                        </div>
-                        <div class="table-container">
-                            <table id="comparison-table">
-                                <thead>
-                                    <tr>
-                                        <th>S.No</th>
-                                        <th>Sector Name</th>
-                                        <th>AWC Name</th>
-                                        <th>AWC Code</th>
-                                        <th>Beneficiary Name</th>
-                                        <th>Mother Name</th>
-                                        <th>DOB</th>
-                                        <th>Gender</th>
-                                        <th>Old Weight (kg)</th>
-                                        <th>Old Height (cm)</th>
-                                        <th>New Weight (kg)</th>
-                                        <th>New Height (cm)</th>
-                                        <th>Nutrition Category</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="comparison-table-body">
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="stat-box neutral-box">
+                        <h3>Total (New Month)</h3>
+                        <p id="stat-comp-new">0</p>
+                    </div>
+                    <div class="stat-box success-box">
+                        <h3>Matched Children</h3>
+                        <p id="stat-comp-matched">0</p>
+                    </div>
+                    <div class="stat-box error-box">
+                        <h3>Height/Weight Updated</h3>
+                        <p id="stat-comp-updated">0</p>
                     </div>
                 </div>
-
+                <div class="table-card">
+                    <div class="table-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>📊 Comparison Report - Matched Children</h3>
+                        <button id="comp-download-btn"
+                            style="background: var(--primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            ⬇ Download PDF
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>S.No</th>
+                                    <th>AWC Name</th>
+                                    <th>AWC Code</th>
+                                    <th>Beneficiary Name</th>
+                                    <th>Mother Name</th>
+                                    <th>DOB</th>
+                                    <th>Old Weight (kg)</th>
+                                    <th>Old Height (cm)</th>
+                                    <th>New Weight (kg)</th>
+                                    <th>New Height (cm)</th>
+                                    <th>Nutrition Category</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
         </div>
     </main>
@@ -494,7 +672,7 @@
         <div id="pdf-table-container"></div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=7"></script>
 </body>
 
 </html>
