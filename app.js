@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const BASE_URL = 'http://localhost:5000';
+    const BASE_URL = window.location.origin;
     const minDaysTarget = 21; // THR completion threshold (21 days)
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('csv-file-input');
