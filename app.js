@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let allLoadedData = []; // Store dataset globally in browser
     let currentIncompleteRows = []; // Store currently filtered rows for export
     let globalSectorName = "All Sectors";
+    let globalDistrict = '';
+    let globalProject = '';
     let activeReportType = "thr"; // "thr", "frs", "sam", "measuring", or "beneficiary"
     let activeBeneficiarySubTab = "mobile"; // "mobile", "aadhaar", or "abha"
 
@@ -380,7 +382,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 allLoadedData = data.allData;
-                globalSectorName = data.sectorName || "Unknown Sector";
+                globalSectorName = data.sectorName || "All Sectors";
+                // Store district and project from metadata header rows
+                if (data.metadata) {
+                    globalDistrict = data.metadata.district || '';
+                    globalProject = data.metadata.project || '';
+                } else {
+                    globalDistrict = '';
+                    globalProject = '';
+                }
                 populateFilterOptions(data.filters);
                 applyFilters(); // Apply default filters and render dashboard
 
@@ -658,15 +668,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // Adjust Titles based on sub-tab
             const vTitle = document.getElementById('stat-ben-verified-title');
             const uvTitle = document.getElementById('stat-ben-unverified-title');
+            const abhaAwcSummary = document.getElementById('abha-awc-summary');
             if (activeBeneficiarySubTab === 'mobile') {
                 vTitle.textContent = "Mobile Verified";
                 uvTitle.textContent = "Mobile Not Verified";
+                if (abhaAwcSummary) abhaAwcSummary.classList.add('hidden');
             } else if (activeBeneficiarySubTab === 'aadhaar') {
                 vTitle.textContent = "Aadhaar Verified";
                 uvTitle.textContent = "Aadhaar Not Verified";
+                if (abhaAwcSummary) abhaAwcSummary.classList.add('hidden');
             } else if (activeBeneficiarySubTab === 'abha') {
                 vTitle.textContent = "ABHA ID Verified";
                 uvTitle.textContent = "ABHA ID Not Verified";
+                if (abhaAwcSummary) abhaAwcSummary.classList.remove('hidden');
+                renderAbhaAwcSummary(incompleteRowsToRender);
             }
 
             let percent = totalTarget === 0 ? 0 : Math.round((givenCount / totalTarget) * 100);
@@ -928,6 +943,72 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Render ABHA AWC-wise Summary Table ---
+    function renderAbhaAwcSummary(rows) {
+        const tbody = document.getElementById('abha-awc-tbody');
+        const badge = document.getElementById('abha-awc-total-badge');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        // Category keys we care about (in display order)
+        const catKeys = [
+            'pregnant_woman',
+            'lactating_mother',
+            'children_0m_6m',
+            'children_6m_3y',
+            'children_3y_6y'
+        ];
+
+        // Build AWC map: { awcKey: { code, name, total, catCounts } }
+        const awcMap = {};
+        rows.forEach(row => {
+            const key = (row.awcCode || '') + '|' + (row.awcName || '');
+            if (!awcMap[key]) {
+                awcMap[key] = {
+                    code: row.awcCode || '',
+                    name: row.awcName || '',
+                    total: 0,
+                    cats: {}
+                };
+                catKeys.forEach(c => awcMap[key].cats[c] = 0);
+            }
+            awcMap[key].total++;
+            const cat = (row.category || '').toLowerCase().trim();
+            if (awcMap[key].cats.hasOwnProperty(cat)) {
+                awcMap[key].cats[cat]++;
+            }
+        });
+
+        // Sort by total descending
+        const sorted = Object.values(awcMap).sort((a, b) => b.total - a.total);
+
+        if (badge) badge.textContent = `${sorted.length} AWC${sorted.length !== 1 ? 's' : ''} | ${rows.length} Unverified`;
+
+        if (sorted.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;">No unverified ABHA records 🎉</td></tr>';
+            return;
+        }
+
+        sorted.forEach((awc, idx) => {
+            const tr = document.createElement('tr');
+            const cellStyle = (val) => val > 0
+                ? `style="color:var(--error); font-weight:700;"`
+                : `style="opacity:0.4;"`;
+            tr.innerHTML = `
+                <td>${idx + 1}</td>
+                <td>${awc.name}</td>
+                <td><strong>${awc.code}</strong></td>
+                <td><span style="background:rgba(239,68,68,0.15);color:var(--error);padding:3px 10px;border-radius:12px;font-weight:700;">${awc.total}</span></td>
+                <td ${cellStyle(awc.cats['pregnant_woman'])}>${awc.cats['pregnant_woman'] || 0}</td>
+                <td ${cellStyle(awc.cats['lactating_mother'])}>${awc.cats['lactating_mother'] || 0}</td>
+                <td ${cellStyle(awc.cats['children_0m_6m'])}>${awc.cats['children_0m_6m'] || 0}</td>
+                <td ${cellStyle(awc.cats['children_6m_3y'])}>${awc.cats['children_6m_3y'] || 0}</td>
+                <td ${cellStyle(awc.cats['children_3y_6y'])}>${awc.cats['children_3y_6y'] || 0}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
     // --- Display Measuring Dashboard ---
     function renderMeasuringDashboard(data) {
         loadingSection.classList.add('hidden');
@@ -1017,10 +1098,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper function: Export to PDF ---
     document.getElementById('download-btn').addEventListener('click', () => {
-        exportToPDF(`poshan_report_${globalSectorName.replace(/\\s+/g, '_')}.pdf`, currentIncompleteRows);
+        const reportLabel = activeReportType === 'frs' ? 'FRS Report'
+            : activeReportType === 'sam' ? '3-Month SAM Report'
+                : activeReportType === 'measuring' ? 'Measuring Report'
+                    : activeReportType === 'beneficiary'
+                        ? (activeBeneficiarySubTab === 'mobile' ? 'Mobile Verification Report'
+                            : activeBeneficiarySubTab === 'aadhaar' ? 'Aadhaar Verification Report'
+                                : 'ABHA Verification Report')
+                        : 'THR Report';
+
+        if (!currentIncompleteRows || !currentIncompleteRows.length) {
+            alert('No data to export!');
+            return;
+        }
+
+        // Group rows by sectorName — one PDF per sector
+        const sectorMap = {};
+        currentIncompleteRows.forEach(r => {
+            const sec = (r.sectorName && r.sectorName !== 'All Sectors')
+                ? r.sectorName
+                : (globalSectorName !== 'All Sectors' ? globalSectorName : 'Report');
+            if (!sectorMap[sec]) sectorMap[sec] = [];
+            sectorMap[sec].push(r);
+        });
+
+        const sectors = Object.keys(sectorMap);
+        // Small delay between downloads so browser doesn't block them
+        sectors.forEach((sec, idx) => {
+            setTimeout(() => {
+                const safeSec = sec.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+                exportToPDF(`${safeSec} ${reportLabel}.pdf`, sectorMap[sec], sec);
+            }, idx * 400);
+        });
     });
 
-    function exportToPDF(filename, rows) {
+    function exportToPDF(filename, rows, sectorOverride) {
         if (!rows || !rows.length) {
             alert('No data to export!');
             return;
@@ -1029,35 +1141,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('landscape'); // Landscape is better for 7 columns
 
+        // ── Header block: Sector / District / Project ──────────────────
+        const pdfSector = sectorOverride || (globalSectorName !== 'All Sectors' ? globalSectorName : '');
         const currentAwc = document.getElementById('filter-awc') ? document.getElementById('filter-awc').value : 'all';
-        let subtitleText = currentAwc === 'all' ? `Sector: ${globalSectorName}` : `Sector: ${globalSectorName} | AWC: ${currentAwc}`;
 
-        if (activeReportType === 'measuring') {
-            const projName = document.getElementById('pdf-project-name') ? document.getElementById('pdf-project-name').textContent.trim() : '';
-            const sectName = document.getElementById('pdf-sector-name') ? document.getElementById('pdf-sector-name').textContent.trim() : '';
-            let subtitleParts = [];
-            if (projName && projName !== 'Unknown') subtitleParts.push(`Project: ${projName}`);
-            if (sectName && sectName !== 'Unknown') subtitleParts.push(`Sector: ${sectName}`);
-            subtitleText = subtitleParts.length > 0 ? subtitleParts.join('  |  ') : '';
+        let reportTitle = 'THR/HCM Pending Details';
+        if (activeReportType === 'frs') reportTitle = 'FRS Pending Details';
+        if (activeReportType === 'sam') reportTitle = 'SAM/MAM 3-Month Intersect Record';
+        if (activeReportType === 'measuring') reportTitle = 'Measuring Efficiency Report';
+        if (activeReportType === 'beneficiary') {
+            if (activeBeneficiarySubTab === 'mobile') reportTitle = 'Beneficiary Mobile Unverified Report';
+            if (activeBeneficiarySubTab === 'aadhaar') reportTitle = 'Beneficiary Aadhaar Unverified Report';
+            if (activeBeneficiarySubTab === 'abha') reportTitle = 'Beneficiary ABHA ID Unverified Report';
         }
 
-        // Add Header Texts
+        let yPos = 15;
+
+        // Report type title (large)
         doc.setFontSize(18);
         doc.setTextColor(40, 40, 40);
-        let titleText = 'THR/HCM Pending Details';
-        if (activeReportType === 'frs') titleText = 'FRS Pending Details';
-        if (activeReportType === 'sam') titleText = 'SAM/MAM 3-Month Intersect Record';
-        if (activeReportType === 'measuring') titleText = 'Measuring Efficiency Report';
-        if (activeReportType === 'beneficiary') {
-            if (activeBeneficiarySubTab === 'mobile') titleText = 'Beneficiary Mobile Unverified Report';
-            if (activeBeneficiarySubTab === 'aadhaar') titleText = 'Beneficiary Aadhaar Unverified Report';
-            if (activeBeneficiarySubTab === 'abha') titleText = 'Beneficiary ABHA ID Unverified Report';
-        }
-        doc.text(titleText, 14, 22);
+        doc.text(reportTitle, 14, yPos);
+        yPos += 9;
 
+        // Sector / District / Project sub-header
         doc.setFontSize(11);
-        doc.setTextColor(100, 100, 100);
-        doc.text(subtitleText, 14, 30);
+        const headerItems = [];
+        if (pdfSector) headerItems.push(`Sector Name: ${pdfSector}`);
+        if (globalDistrict) headerItems.push(`District: ${globalDistrict}`);
+        if (globalProject) headerItems.push(`Project: ${globalProject}`);
+        if (currentAwc !== 'all') headerItems.push(`AWC: ${currentAwc}`);
+
+        if (headerItems.length > 0) {
+            doc.setTextColor(60, 60, 60);
+            headerItems.forEach(item => {
+                doc.text(item, 14, yPos);
+                yPos += 6;
+            });
+        }
+
+        const tableStartY = yPos + 4;
 
         // Prepare Table Data
         let headers = [['AWC CODE', 'AWC NAME', 'BENEFICIARY NAME', 'CATEGORY', 'THR DAYS', 'HCM DAYS', 'TOTAL']];
@@ -1184,7 +1306,7 @@ document.addEventListener('DOMContentLoaded', () => {
         doc.autoTable({
             head: headers,
             body: data,
-            startY: 40,
+            startY: tableStartY,
             theme: 'grid',
             headStyles: { fillColor: [15, 23, 42], textColor: 255 },
             styles: {
@@ -1390,7 +1512,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 margin: { top: 28, left: 10, right: 10 }
             });
 
-            doc.save('Comparison_Report.pdf');
+            const compSector = (compTableData[0] && compTableData[0].sectorName)
+                ? compTableData[0].sectorName.replace(/[^a-zA-Z0-9\s]/g, '').trim()
+                : 'Sector';
+            doc.save(`${compSector} Comparison Report.pdf`);
         });
     }
 

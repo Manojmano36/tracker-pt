@@ -44,10 +44,10 @@ def upload_file_inner():
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
     
-    df, sector_name = read_pt_data(file)
+    df, meta = read_pt_data(file)
     if df is None:
-        # read_pt_data returns None, error_msg
-        return jsonify({'error': f'Failed to parse file: {sector_name}'}), 400
+        return jsonify({'error': f'Failed to parse file: {meta}'}), 400
+    sector_name = meta.get('sectorName', 'All Sectors')
     
     # Determine Report Type based on columns
     report_type = 'thr'
@@ -98,7 +98,13 @@ def upload_file_inner():
         filters['thrDays'] = sorted(list(set([int(x) for x in non_empty['THR_Days'].unique()])))
         filters['hcmDays'] = sorted(list(set([int(x) for x in non_empty['HCM_Days'].unique()])))
 
+        # Detect SECTOR column for per-row sector name
+        sector_col = next((c for c in non_empty.columns if c in ('SECTOR NAME', 'SECTOR')), None)
+
         for _, row in non_empty.iterrows():
+            row_sector = str(row[sector_col]).title().strip() if sector_col else sector_name
+            if not row_sector or row_sector.lower() in ['nan', '']:
+                row_sector = sector_name
             all_data.append({
                 'awcCode': str(row.get('AWC CODE', '')),
                 'awcName': str(row.get('AWC NAME', '')).strip(),
@@ -108,9 +114,10 @@ def upload_file_inner():
                 'optout': str(row['SNP OPT-OUT']),
                 'thr': int(row['THR_Days']),
                 'hcm': int(row['HCM_Days']),
-                'total': int(row['Total_Days'])
+                'total': int(row['Total_Days']),
+                'sectorName': row_sector
             })
-            
+
     elif report_type == 'frs':
         non_empty['FACE CAPTURED'] = non_empty.get('FACE CAPTURED', pd.Series([''] * len(non_empty))).astype(str).str.strip()
         non_empty['EKYC DONE'] = non_empty.get('EKYC DONE', pd.Series([''] * len(non_empty))).astype(str).str.strip()
@@ -122,7 +129,13 @@ def upload_file_inner():
         filters['ekycDone'] = sorted(list(set([str(x).strip() for x in non_empty['EKYC DONE'].unique() if str(x).strip() not in ['nan', '']])))
         filters['aadhaarFaceMatching'] = sorted(list(set([str(x).strip() for x in non_empty['AADHAAR FACE MATCHING'].unique() if str(x).strip() not in ['nan', '']])))
 
+        # Detect SECTOR column for per-row sector name
+        sector_col = next((c for c in non_empty.columns if c in ('SECTOR NAME', 'SECTOR')), None)
+
         for _, row in non_empty.iterrows():
+            row_sector = str(row[sector_col]).title().strip() if sector_col else sector_name
+            if not row_sector or row_sector.lower() in ['nan', '']:
+                row_sector = sector_name
             all_data.append({
                 'awcCode': str(row.get('AWC CODE', '')),
                 'awcName': str(row.get('AWC NAME', '')).strip(),
@@ -132,7 +145,8 @@ def upload_file_inner():
                 'guardian': str(row['PARENT_NAME']),
                 'faceCaptured': str(row['FACE CAPTURED']),
                 'ekycDone': str(row['EKYC DONE']),
-                'aadhaarFaceMatching': str(row['AADHAAR FACE MATCHING'])
+                'aadhaarFaceMatching': str(row['AADHAAR FACE MATCHING']),
+                'sectorName': row_sector
             })
             
     elif report_type == 'beneficiary':
@@ -167,50 +181,95 @@ def upload_file_inner():
     return jsonify({
         'reportType': report_type,
         'sectorName': sector_name,
+        'metadata': meta,
         'allData': all_data,
         'filters': filters
     })
 
 # Helper function to read POSHAN Tracker CSV/Excel format robustly
 def read_pt_data(file_obj):
+    """Parse a POSHAN Tracker Excel/CSV file.
+    Returns (df, metadata_dict) where metadata_dict has keys:
+      sectorName, district, project
+    On parse failure returns (None, error_string).
+    """
+    import re
     filename = file_obj.filename.lower()
-    sector_name = "All Sectors"
-    
+    meta = {'sectorName': 'All Sectors', 'district': '', 'project': ''}
+
+    def _extract_meta(label, val_str, row_vals_str, j):
+        """Try to pull a value for `label` from a cell or the adjacent cell."""
+        if ':' in val_str:
+            extracted = val_str.split(':', 1)[-1].strip()
+        else:
+            extracted = ''
+            for k in range(j + 1, len(row_vals_str)):
+                nxt = row_vals_str[k]
+                if nxt and nxt.lower() not in ['', 'nan']:
+                    extracted = nxt
+                    break
+        if extracted and extracted.lower() not in ['', 'nan']:
+            return extracted.title()
+        return None
+
     try:
         if filename.endswith('.xlsx') or filename.endswith('.xls'):
-            df = pd.read_excel(file_obj, dtype=str)
+            df = pd.read_excel(file_obj, dtype=str, header=None)
             header_idx = -1
-            
-            # Find accurate header row
-            for i, row in df.head(20).iterrows():
-                # Extract sector name if possible
-                row_str = " ".join([str(v) for v in row.values]).lower()
-                if 'sector' in row_str and sector_name == "All Sectors":
-                    for val in row.values:
-                        val_str = str(val).lower()
-                        if 'sector' in val_str and ':' in val_str:
-                            sector_name = str(val).split(':', 1)[-1].strip()
-                            
-                if any('AWC NAME' == str(val).strip().upper() for val in row.values):
+
+            for i in range(min(20, len(df))):
+                row_vals = list(df.iloc[i].values)
+                row_vals_str = [str(v).strip() for v in row_vals]
+
+                if any('AWC NAME' == v.upper() for v in row_vals_str):
                     header_idx = i
                     break
-                    
+
+                for j, val in enumerate(row_vals_str):
+                    vl = val.lower()
+                    if 'sector' in vl and 'sector name' not in vl and meta['sectorName'] == 'All Sectors':
+                        r = _extract_meta('sector', vl, row_vals_str, j)
+                        if r: meta['sectorName'] = r
+                    if 'district' in vl and not meta['district']:
+                        r = _extract_meta('district', vl, row_vals_str, j)
+                        if r: meta['district'] = r
+                    if 'project' in vl and not meta['project']:
+                        r = _extract_meta('project', vl, row_vals_str, j)
+                        if r: meta['project'] = r
+
             if header_idx != -1:
                 df.columns = df.iloc[header_idx].astype(str).str.strip().str.upper()
-                df = df.iloc[header_idx+1:].reset_index(drop=True)
+                df = df.iloc[header_idx + 1:].reset_index(drop=True)
             else:
-                df.columns = df.columns.astype(str).str.strip().str.upper()
-                
+                df.columns = df.iloc[0].astype(str).str.strip().str.upper()
+                df = df.iloc[1:].reset_index(drop=True)
+
         else:
             content = file_obj.read().decode('utf-8', errors='replace')
             lines = content.split('\n')
             header_idx = -1
-            
+
             for i, line in enumerate(lines[:20]):
-                if 'AWC NAME' in line.upper() and 'BENEFICIARY NAME' in line.upper():
+                line_upper = line.upper()
+                if meta['sectorName'] == 'All Sectors' and 'SECTOR' in line_upper and 'SECTOR NAME' not in line_upper:
+                    m = re.search(r'sector\s*[:\-]\s*([^,\n]+)', line, re.IGNORECASE)
+                    if m:
+                        extracted = m.group(1).strip().strip('"').strip("'")
+                        if extracted and extracted.lower() not in ['', 'nan']:
+                            meta['sectorName'] = extracted.title()
+                if not meta['district'] and 'DISTRICT' in line_upper:
+                    m = re.search(r'district\s*[:\-]\s*([^,\n]+)', line, re.IGNORECASE)
+                    if m:
+                        meta['district'] = m.group(1).strip().strip('"').strip("'").title()
+                if not meta['project'] and 'PROJECT' in line_upper:
+                    m = re.search(r'project\s*[:\-]\s*([^,\n]+)', line, re.IGNORECASE)
+                    if m:
+                        meta['project'] = m.group(1).strip().strip('"').strip("'").title()
+
+                if 'AWC NAME' in line_upper and 'BENEFICIARY NAME' in line_upper:
                     header_idx = i
                     break
-                    
+
             if header_idx != -1:
                 df = pd.read_csv(io.StringIO(content), skiprows=header_idx, dtype=str)
                 df.columns = df.columns.astype(str).str.strip().str.upper()
@@ -218,12 +277,12 @@ def read_pt_data(file_obj):
                 df = pd.read_csv(io.StringIO(content), dtype=str)
                 df.columns = df.columns.astype(str).str.strip().str.upper()
 
-        # Clean crucial columns
+        # Clean all string columns
         for col in df.columns:
             if df[col].dtype == object:
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                
-        return df, sector_name
+
+        return df, meta
     except Exception as e:
         return None, str(e)
 
@@ -287,44 +346,77 @@ def upload_measuring_inner():
             if header_idx != -1: df = pd.read_csv(io.StringIO(content), skiprows=header_idx, dtype=str)
             else: return jsonify({'error': 'Could not find header row.'}), 400
 
-        col_awc = next((c for c in df.columns if 'AWC' in str(c).upper()), None)
+        col_awc = next((c for c in df.columns if 'AWC NAME' in str(c).upper()), None) or \
+                  next((c for c in df.columns if 'AWC' in str(c).upper()), None)
         col_total = next((c for c in df.columns if 'TOTAL ACTIVE CHILDREN' in str(c).upper() and 'MEASURED' not in str(c).upper()), None)
         col_measured = next((c for c in df.columns if 'TOTAL ACTIVE CHILDREN MEASURED' in str(c).upper() or ('MEASURED' in str(c).upper() and '%' not in str(c).upper())), None)
-        if not col_awc or not col_total or not col_measured: return jsonify({'error': f'Missing columns. Found: {list(df.columns)}'}), 400
 
-        df = df.dropna(subset=[col_awc])
+        # Detect beneficiary-level format: one row per child with weight column
+        col_weight = next((c for c in df.columns if 'WEIGHT' in str(c).upper() and '%' not in str(c).upper()), None)
+        is_beneficiary_level = bool(col_weight and (not col_total or not col_measured))
+
+        if not col_awc:
+            return jsonify({'error': f'Cannot find AWC NAME column. Found: {list(df.columns)}'}), 400
+
         all_data = []
         global_total = 0
         global_measured = 0
-        for index, row in df.iterrows():
-            awc_name = str(row[col_awc]).strip()
-            if not awc_name or awc_name.lower() == 'nan' or 'total' in awc_name.lower(): continue
-            try:
-                total_child = int(float(str(row[col_total]).replace(',', '').strip() or 0))
-                measured = int(float(str(row[col_measured]).replace(',', '').strip() or 0))
-            except ValueError: continue
-            if total_child == 0: continue
-            
-            # Aggregate global stats before filtering
-            global_total += total_child
-            global_measured += measured
-            
-            need_to_measure = total_child - measured
-            comp_pct = round((measured / total_child) * 100)
-            if comp_pct < 100:
-                all_data.append({
-                    'awcName': awc_name.title(), 'totalChildCount': total_child,
-                    'weightTakenCount': measured, 'needToTakeWeight': need_to_measure, 'completionPercent': comp_pct
-                })
+
+        if is_beneficiary_level:
+            # Group by AWC, count measured from WEIGHT column
+            df_clean = df[df[col_awc].notna()].copy()
+            df_clean = df_clean[~df_clean[col_awc].astype(str).str.strip().str.lower().isin(['nan', '', 'total', 'grand total'])]
+
+            for awc_name, grp in df_clean.groupby(col_awc):
+                awc_name = str(awc_name).strip()
+                if not awc_name or 'total' in awc_name.lower(): continue
+                total_child = len(grp)
+                # Measured = child has a non-empty, non-zero weight recorded
+                measured = int(grp[col_weight].apply(
+                    lambda v: bool(str(v).strip() and str(v).strip() not in ['0', 'NAN', '', '-', '0.0'])
+                ).sum())
+                global_total += total_child
+                global_measured += measured
+                need_to_measure = total_child - measured
+                comp_pct = round((measured / total_child) * 100) if total_child > 0 else 0
+                if comp_pct < 100:
+                    all_data.append({
+                        'awcName': awc_name.title(), 'totalChildCount': total_child,
+                        'weightTakenCount': measured, 'needToTakeWeight': need_to_measure, 'completionPercent': comp_pct
+                    })
+        else:
+            # Pre-aggregated AWC summary file
+            if not col_total or not col_measured:
+                return jsonify({'error': f'Missing columns. Found: {list(df.columns)}'}), 400
+
+            df = df.dropna(subset=[col_awc])
+            for index, row in df.iterrows():
+                awc_name = str(row[col_awc]).strip()
+                if not awc_name or awc_name.lower() == 'nan' or 'total' in awc_name.lower(): continue
+                try:
+                    total_child = int(float(str(row[col_total]).replace(',', '').strip() or 0))
+                    measured = int(float(str(row[col_measured]).replace(',', '').strip() or 0))
+                except ValueError: continue
+                if total_child == 0: continue
+                global_total += total_child
+                global_measured += measured
+                need_to_measure = total_child - measured
+                comp_pct = round((measured / total_child) * 100)
+                if comp_pct < 100:
+                    all_data.append({
+                        'awcName': awc_name.title(), 'totalChildCount': total_child,
+                        'weightTakenCount': measured, 'needToTakeWeight': need_to_measure, 'completionPercent': comp_pct
+                    })
+
         all_data.sort(key=lambda x: (x['completionPercent'], -x['needToTakeWeight']))
         for i, item in enumerate(all_data): item['sNo'] = i + 1
-        
+
         global_stats = {
             'totalChildren': global_total,
             'totalMeasured': global_measured,
             'totalRemaining': global_total - global_measured
         }
-        
+
         return jsonify({'reportType': 'measuring', 'metadata': metadata, 'globalStats': global_stats, 'tableData': all_data, 'count': len(all_data)})
     except Exception as e:
         import traceback
@@ -344,9 +436,12 @@ def upload_multi_inner():
     if 'file1' not in request.files or 'file2' not in request.files or 'file3' not in request.files:
         return jsonify({'error': 'Please upload exactly 3 files.'}), 400
         
-    df1, s1 = read_pt_data(request.files['file1'])
-    df2, s2 = read_pt_data(request.files['file2'])
-    df3, s3 = read_pt_data(request.files['file3'])
+    df1, m1 = read_pt_data(request.files['file1'])
+    df2, m2 = read_pt_data(request.files['file2'])
+    df3, m3 = read_pt_data(request.files['file3'])
+    s1 = m1.get('sectorName', 'All Sectors') if isinstance(m1, dict) else str(m1)
+    s2 = m2.get('sectorName', 'All Sectors') if isinstance(m2, dict) else str(m2)
+    s3 = m3.get('sectorName', 'All Sectors') if isinstance(m3, dict) else str(m3)
     
     if df1 is None or df2 is None or df3 is None:
         return jsonify({'error': 'One or more files have an invalid format or could not be parsed.'}), 400
@@ -497,10 +592,10 @@ def debug_columns():
         f = request.files.get('file')
         if not f:
             return jsonify({'error': 'No file uploaded'}), 400
-        df, sector = read_pt_data(f)
+        df, meta = read_pt_data(f)
         if df is None:
-            return jsonify({'error': sector}), 400
-        return jsonify({'columns': list(df.columns), 'rows': len(df), 'sector': sector, 'sample': df.head(3).fillna('').to_dict(orient='records')})
+            return jsonify({'error': meta}), 400
+        return jsonify({'columns': list(df.columns), 'rows': len(df), 'meta': meta, 'sample': df.head(3).fillna('').to_dict(orient='records')})
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
@@ -521,8 +616,10 @@ def upload_comparison_inner():
     if 'file_old' not in request.files or 'file_new' not in request.files:
         return jsonify({'error': 'Please upload exactly 2 files: Old Month and New Month.'}), 400
 
-    df_old, s_old = read_pt_data(request.files['file_old'])
-    df_new, s_new = read_pt_data(request.files['file_new'])
+    df_old, m_old = read_pt_data(request.files['file_old'])
+    df_new, m_new = read_pt_data(request.files['file_new'])
+    s_old = m_old.get('sectorName', 'All Sectors') if isinstance(m_old, dict) else str(m_old)
+    s_new = m_new.get('sectorName', 'All Sectors') if isinstance(m_new, dict) else str(m_new)
     if df_old is None or df_new is None:
         return jsonify({'error': 'One or more files have an invalid format or could not be parsed.'}), 400
 

@@ -436,6 +436,37 @@
                         </div>
                     </div>
 
+                    <!-- ABHA AWC-wise Summary (shown only on ABHA sub-tab) -->
+                    <div id="abha-awc-summary" class="hidden" style="width:100%; margin-top: 1.5rem;">
+                        <div class="table-card" style="padding: 1.25rem 1.5rem;">
+                            <div class="table-header"
+                                style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                                <h3 style="margin:0; font-size:1.05rem;">📊 AWC-wise ABHA ID Not Verified Summary</h3>
+                                <span id="abha-awc-total-badge"
+                                    style="background:rgba(239,68,68,0.15); color:var(--error); padding:4px 14px; border-radius:20px; font-size:0.85rem; font-weight:700;"></span>
+                            </div>
+                            <div class="table-container">
+                                <table id="abha-awc-table" style="font-size:0.85rem;">
+                                    <thead>
+                                        <tr id="abha-awc-thead">
+                                            <th>S.NO</th>
+                                            <th>AWC NAME</th>
+                                            <th>AWC CODE</th>
+                                            <th>TOTAL NOT VERIFIED</th>
+                                            <th>PREGNANT WOMAN</th>
+                                            <th>LACTATING MOTHER</th>
+                                            <th>CHILDREN 0m-6m</th>
+                                            <th>CHILDREN 6m-3y</th>
+                                            <th>CHILDREN 3y-6y</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="abha-awc-tbody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="summary-dashboard hidden" id="sam-dashboard">
                         <div class="stat-box expandable" style="cursor: pointer; position: relative;"
                             onclick="var d=this.querySelector('.breakdown-details'); if(d) d.classList.toggle('hidden');">
@@ -672,7 +703,7 @@
         <div id="pdf-table-container"></div>
     </div>
 
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=8"></script>
 </body>
 
 </html>
